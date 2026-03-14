@@ -2,6 +2,7 @@
 
 import argparse
 import re
+from datetime import datetime
 
 from network_classifier.graph import load_graph
 from network_classifier.centrality import compute_edge_betweenness
@@ -46,17 +47,21 @@ def main() -> None:
 
     output = args.output or _default_output(args.city, args.format)
 
-    print(f"Loading graph for '{args.city}' (network_type={args.network_type})...")
+    def log(msg: str) -> None:
+        ts = datetime.now().strftime("%H:%M:%S")
+        print(f"[{ts}] {msg}")
+
+    log(f"Loading graph for '{args.city}' (network_type={args.network_type})...")
     G = load_graph(args.city, args.network_type)
-    print(f"Graph loaded: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+    log(f"Graph loaded: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
 
-    print("Computing edge betweenness centrality...")
+    log("Computing edge betweenness centrality...")
     G = compute_edge_betweenness(G)
-    print("Betweenness centrality computed.")
+    log("Betweenness centrality computed.")
 
-    print(f"Exporting to {output}...")
+    log(f"Exporting to {output}...")
     if args.format == "graphml":
         export_graphml(G, output)
     else:
         export_geopackage(G, output)
-    print("Done.")
+    log("Done.")
