@@ -2,11 +2,13 @@
 
 import argparse
 import re
-from datetime import datetime
 
-from network_classifier.graph import load_graph
+from rich.console import Console
 from network_classifier.centrality import compute_edge_betweenness
-from network_classifier.export import export_graphml, export_geopackage
+from network_classifier.export import export_geopackage, export_graphml
+from network_classifier.graph import load_graph
+
+console = Console()
 
 
 def _default_output(city: str, fmt: str) -> str:
@@ -47,21 +49,17 @@ def main() -> None:
 
     output = args.output or _default_output(args.city, args.format)
 
-    def log(msg: str) -> None:
-        ts = datetime.now().strftime("%H:%M:%S")
-        print(f"[{ts}] {msg}")
-
-    log(f"Loading graph for '{args.city}' (network_type={args.network_type})...")
+    console.log(f"Loading graph for [bold]{args.city}[/bold] (network_type={args.network_type})...")
     G = load_graph(args.city, args.network_type)
-    log(f"Graph loaded: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+    console.log(f"Graph loaded: [green]{G.number_of_nodes()}[/green] nodes, [green]{G.number_of_edges()}[/green] edges")
 
-    log("Computing edge betweenness centrality...")
+    console.log("Computing edge betweenness centrality...")
     G = compute_edge_betweenness(G)
-    log("Betweenness centrality computed.")
+    console.log("[green]Betweenness centrality computed.[/green]")
 
-    log(f"Exporting to {output}...")
+    console.log(f"Exporting to [bold]{output}[/bold]...")
     if args.format == "graphml":
         export_graphml(G, output)
     else:
         export_geopackage(G, output)
-    log("Done.")
+    console.log("[bold green]Done.[/bold green]")

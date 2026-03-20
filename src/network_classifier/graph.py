@@ -1,7 +1,7 @@
 """Load street network graphs via OSMnx."""
 
-import osmnx as ox
 import networkx as nx
+import osmnx as ox
 
 
 def load_graph(place: str, network_type: str = "drive") -> nx.MultiDiGraph:

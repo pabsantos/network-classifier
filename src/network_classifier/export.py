@@ -1,7 +1,7 @@
 """Export graphs to GraphML or GeoPackage."""
 
-import osmnx as ox
 import networkx as nx
+import osmnx as ox
 
 
 def export_graphml(G: nx.MultiDiGraph, filepath: str) -> None:

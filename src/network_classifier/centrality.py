@@ -35,7 +35,9 @@ def compute_edge_betweenness(G: nx.MultiDiGraph) -> nx.MultiDiGraph:
 
     # Step 3: Index edges and compute betweenness
     nk_graph.indexEdges()
-    bc = nk.centrality.Betweenness(nk_graph, normalized=True, computeEdgeCentrality=True)
+    bc = nk.centrality.Betweenness(
+        nk_graph, normalized=True, computeEdgeCentrality=True
+    )
     bc.run()
 
     # Step 4: Write scores back to the original graph

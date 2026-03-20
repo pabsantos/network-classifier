@@ -8,6 +8,7 @@ dependencies = [
     "jupyter>=1.1.1",
     "networkit>=11.2.1",
     "osmnx>=2.1.0",
+    "rich>=14.0.0",
 ]
 
 [project.scripts]
