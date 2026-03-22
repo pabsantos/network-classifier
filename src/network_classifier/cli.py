@@ -4,7 +4,9 @@ import argparse
 import re
 
 from rich.console import Console
+from rich.table import Table
 from network_classifier.centrality import compute_centrality
+from network_classifier.classify import classify_edges, cluster_summary
 from network_classifier.export import export_geopackage, export_graphml
 from network_classifier.graph import load_graph
 
@@ -44,6 +46,20 @@ def main() -> None:
         choices=["drive", "walk", "bike", "all"],
         help="Network type (default: drive)",
     )
+    parser.add_argument(
+        "-m",
+        "--method",
+        default=None,
+        choices=["gmm", "kmeans"],
+        help="Clustering method (default: no clustering)",
+    )
+    parser.add_argument(
+        "-k",
+        "--n-clusters",
+        type=int,
+        default=None,
+        help="Number of clusters (default: auto-select best k)",
+    )
 
     args = parser.parse_args()
 
@@ -57,9 +73,81 @@ def main() -> None:
     G = compute_centrality(G)
     console.log("[green]Centrality metrics computed.[/green]")
 
+    if args.method is not None:
+        console.log(
+            f"Classifying edges using [bold]{args.method.upper()}[/bold]..."
+        )
+        G, k, model_metrics = classify_edges(G, args.method, args.n_clusters)
+        console.log(
+            f"[green]Classification complete.[/green] "
+            f"Selected [bold]{k}[/bold] clusters"
+        )
+        _print_model_metrics(args.method, model_metrics)
+        summary = cluster_summary(G)
+        _print_cluster_summary(summary)
+
     console.log(f"Exporting to [bold]{output}[/bold]...")
     if args.format == "graphml":
         export_graphml(G, output)
     else:
         export_geopackage(G, output)
     console.log("[bold green]Done.[/bold green]")
+
+
+def _print_model_metrics(method: str, metrics: dict) -> None:
+    """Print model evaluation metrics."""
+    table = Table(
+        title=f"{method.upper()} Metrics",
+        show_header=True,
+        header_style="bold",
+    )
+    table.add_column("Metric")
+    table.add_column("Value", justify="right")
+
+    labels = {
+        "inertia": "Inertia",
+        "silhouette_score": "Silhouette Score",
+        "bic": "BIC",
+        "aic": "AIC",
+        "log_likelihood": "Log-Likelihood",
+        "n_iter": "Iterations",
+    }
+
+    for key, value in metrics.items():
+        label = labels.get(key, key)
+        if key == "n_iter":
+            table.add_row(label, str(value))
+        else:
+            table.add_row(label, f"{value:.4f}")
+
+    console.print(table)
+
+
+def _print_cluster_summary(summary: dict) -> None:
+    """Print per-cluster distribution of centrality metrics."""
+    for cluster_id in sorted(summary):
+        metrics = summary[cluster_id]
+        count = int(metrics["betweenness"]["count"])
+
+        console.print(
+            f"\n[bold]Cluster {cluster_id}[/bold] ({count} edges)"
+        )
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Metric")
+        table.add_column("Mean", justify="right")
+        table.add_column("Std", justify="right")
+        table.add_column("Min", justify="right")
+        table.add_column("Max", justify="right")
+
+        for metric_name in ("betweenness", "closeness", "degree"):
+            stats = metrics[metric_name]
+            table.add_row(
+                metric_name,
+                f"{stats['mean']:.6f}",
+                f"{stats['std']:.6f}",
+                f"{stats['min']:.6f}",
+                f"{stats['max']:.6f}",
+            )
+
+        console.print(table)

@@ -9,6 +9,7 @@ dependencies = [
     "networkit>=11.2.1",
     "osmnx>=2.1.0",
     "rich>=14.0.0",
+    "scikit-learn>=1.4.0",
 ]
 
 [project.scripts]
