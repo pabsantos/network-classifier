@@ -4,7 +4,7 @@ import argparse
 import re
 
 from rich.console import Console
-from network_classifier.centrality import compute_edge_betweenness
+from network_classifier.centrality import compute_centrality
 from network_classifier.export import export_geopackage, export_graphml
 from network_classifier.graph import load_graph
 
@@ -53,9 +53,9 @@ def main() -> None:
     G = load_graph(args.city, args.network_type)
     console.log(f"Graph loaded: [green]{G.number_of_nodes()}[/green] nodes, [green]{G.number_of_edges()}[/green] edges")
 
-    console.log("Computing edge betweenness centrality...")
-    G = compute_edge_betweenness(G)
-    console.log("[green]Betweenness centrality computed.[/green]")
+    console.log("Computing centrality metrics (betweenness, closeness, degree)...")
+    G = compute_centrality(G)
+    console.log("[green]Centrality metrics computed.[/green]")
 
     console.log(f"Exporting to [bold]{output}[/bold]...")
     if args.format == "graphml":
