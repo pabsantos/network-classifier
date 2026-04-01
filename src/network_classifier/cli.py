@@ -2,13 +2,15 @@
 
 import argparse
 import re
+from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
 from network_classifier.centrality import compute_centrality
-from network_classifier.classify import classify_edges, cluster_summary
+from network_classifier.classify import classify_edges
 from network_classifier.export import export_geopackage, export_graphml
 from network_classifier.graph import load_graph
+from network_classifier.plots import plot_kde, plot_map
 
 console = Console()
 
@@ -64,6 +66,7 @@ def main() -> None:
     args = parser.parse_args()
 
     output = args.output or _default_output(args.city, args.format)
+    output_path = Path(output)
 
     console.log(f"Loading graph for [bold]{args.city}[/bold] (network_type={args.network_type})...")
     G = load_graph(args.city, args.network_type)
@@ -83,8 +86,18 @@ def main() -> None:
             f"Selected [bold]{k}[/bold] clusters"
         )
         _print_model_metrics(args.method, model_metrics)
-        summary = cluster_summary(G)
-        _print_cluster_summary(summary)
+
+        plot_dir = output_path.parent / "output"
+
+        console.log("Generating KDE plots...")
+        kde_paths = plot_kde(G, plot_dir)
+        for p in kde_paths:
+            console.log(f"  Saved [bold]{p}[/bold]")
+
+        map_path = plot_dir / "map.png"
+        console.log("Generating cluster map...")
+        plot_map(G, map_path)
+        console.log(f"  Saved [bold]{map_path}[/bold]")
 
     console.log(f"Exporting to [bold]{output}[/bold]...")
     if args.format == "graphml":
@@ -121,33 +134,3 @@ def _print_model_metrics(method: str, metrics: dict) -> None:
             table.add_row(label, f"{value:.4f}")
 
     console.print(table)
-
-
-def _print_cluster_summary(summary: dict) -> None:
-    """Print per-cluster distribution of centrality metrics."""
-    for cluster_id in sorted(summary):
-        metrics = summary[cluster_id]
-        count = int(metrics["betweenness"]["count"])
-
-        console.print(
-            f"\n[bold]Cluster {cluster_id}[/bold] ({count} edges)"
-        )
-
-        table = Table(show_header=True, header_style="bold")
-        table.add_column("Metric")
-        table.add_column("Mean", justify="right")
-        table.add_column("Std", justify="right")
-        table.add_column("Min", justify="right")
-        table.add_column("Max", justify="right")
-
-        for metric_name in ("betweenness", "closeness", "degree"):
-            stats = metrics[metric_name]
-            table.add_row(
-                metric_name,
-                f"{stats['mean']:.6f}",
-                f"{stats['std']:.6f}",
-                f"{stats['min']:.6f}",
-                f"{stats['max']:.6f}",
-            )
-
-        console.print(table)

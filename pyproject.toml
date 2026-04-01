@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "jupyter>=1.1.1",
+    "matplotlib>=3.8.0",
     "networkit>=11.2.1",
     "osmnx>=2.1.0",
     "rich>=14.0.0",
