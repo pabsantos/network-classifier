@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import contextily as cx
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -105,6 +106,7 @@ def plot_map(G: nx.MultiDiGraph, filepath: Path) -> None:
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
     gdf_edges = ox.graph_to_gdfs(G, nodes=False, edges=True)
+    gdf_edges = gdf_edges.to_crs(epsg=3857)
     n_clusters = gdf_edges["cluster"].nunique()
     cmap = ListedColormap(_cluster_colors(n_clusters))
 
@@ -118,6 +120,7 @@ def plot_map(G: nx.MultiDiGraph, filepath: Path) -> None:
         linewidth=0.5,
         cmap=cmap,
     )
+    cx.add_basemap(ax, source=cx.providers.CartoDB.Positron)
     ax.set_axis_off()
     ax.set_title("Road Network \u2014 Clusters")
     fig.tight_layout()

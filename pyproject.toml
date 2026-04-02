@@ -5,6 +5,7 @@ description = "CLI tool to classify road networks using betweenness centrality"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "contextily>=1.6.0",
     "jupyter>=1.1.1",
     "matplotlib>=3.8.0",
     "networkit>=11.2.1",
