@@ -12,3 +12,4 @@ wheels/
 .claude
 CLAUDE.md
 cache/
+output/*
