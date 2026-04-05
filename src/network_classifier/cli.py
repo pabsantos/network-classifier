@@ -7,10 +7,10 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from network_classifier.centrality import compute_centrality
-from network_classifier.classify import classify_edges
+from network_classifier.classify import classify_edges, highway_cluster_crosstab
 from network_classifier.export import export_geopackage, export_graphml
 from network_classifier.graph import load_graph
-from network_classifier.plots import plot_kde, plot_map
+from network_classifier.plots import plot_crosstab_heatmap, plot_kde, plot_map
 
 console = Console()
 
@@ -98,6 +98,12 @@ def main() -> None:
         console.log("Generating cluster map...")
         plot_map(G, map_path)
         console.log(f"  Saved [bold]{map_path}[/bold]")
+
+        console.log("Generating highway x cluster heatmap...")
+        ct = highway_cluster_crosstab(G)
+        heatmap_path = plot_dir / "highway_cluster_heatmap.png"
+        plot_crosstab_heatmap(ct, heatmap_path)
+        console.log(f"  Saved [bold]{heatmap_path}[/bold]")
 
     console.log(f"Exporting to [bold]{output}[/bold]...")
     if args.format == "graphml":

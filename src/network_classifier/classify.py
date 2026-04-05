@@ -1,6 +1,7 @@
 """Classify edges into clusters based on centrality metrics."""
 
 import numpy as np
+import pandas as pd
 import networkx as nx
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
@@ -130,3 +131,45 @@ def cluster_summary(
             }
 
     return summary
+
+
+def highway_cluster_crosstab(
+    G: nx.MultiDiGraph,
+) -> pd.DataFrame:
+    """Build a cross-tabulation between OSM highway class and cluster label,
+    weighted by edge length (km).
+
+    When a highway attribute is a list (multi-typed edge), the first value is
+    used.
+
+    Returns
+    -------
+    pd.DataFrame
+        Rows = highway classes, columns = cluster IDs, values = total length
+        in km.
+    """
+    records: list[dict] = []
+
+    for _u, _v, _key, data in G.edges(keys=True, data=True):
+        hw = data.get("highway", "unknown")
+        if isinstance(hw, list):
+            hw = hw[0]
+        if hw.endswith("_link"):
+            hw = hw.removesuffix("_link")
+        records.append({
+            "highway": hw,
+            "cluster": data["cluster"],
+            "length_km": data.get("length", 0.0) / 1000.0,
+        })
+
+    df = pd.DataFrame(records)
+    ct = df.pivot_table(
+        index="highway",
+        columns="cluster",
+        values="length_km",
+        aggfunc="sum",
+        fill_value=0.0,
+    )
+    ct.columns.name = "cluster"
+    ct = ct.loc[ct.sum(axis=1).sort_values(ascending=False).index]
+    return ct
