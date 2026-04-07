@@ -129,6 +129,50 @@ def plot_map(G: nx.MultiDiGraph, filepath: Path) -> None:
     plt.close(fig)
 
 
+def plot_umatrix(
+    som,
+    neuron_label_grid: np.ndarray,
+    filepath: Path,
+    n_clusters: int,
+) -> None:
+    """Save a U-matrix of the trained SOM alongside neuron-cluster assignments.
+
+    Left panel: U-matrix (normalized inter-neuron distances). Darker cells
+    indicate larger gaps between neighbouring neurons — i.e. cluster borders.
+    Right panel: cluster id assigned to each neuron after the second-stage
+    K-Means on the SOM codebook.
+    """
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+
+    umatrix = som.distance_map()
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    im0 = axes[0].imshow(umatrix.T, cmap="bone_r", origin="lower")
+    axes[0].set_title("U-Matrix \u2014 neuron distances")
+    axes[0].set_xlabel("Grid X")
+    axes[0].set_ylabel("Grid Y")
+    fig.colorbar(im0, ax=axes[0], label="Normalized distance")
+
+    cmap = ListedColormap(_cluster_colors(n_clusters))
+    im1 = axes[1].imshow(
+        neuron_label_grid.T,
+        cmap=cmap,
+        origin="lower",
+        vmin=-0.5,
+        vmax=n_clusters - 0.5,
+    )
+    axes[1].set_title("SOM neurons \u2014 cluster assignment")
+    axes[1].set_xlabel("Grid X")
+    axes[1].set_ylabel("Grid Y")
+    cbar = fig.colorbar(im1, ax=axes[1], ticks=range(n_clusters))
+    cbar.set_label("Cluster")
+
+    fig.tight_layout()
+    fig.savefig(filepath, dpi=150)
+    plt.close(fig)
+
+
 def plot_crosstab_heatmap(ct: pd.DataFrame, filepath: Path) -> None:
     """Save a heatmap of the highway class x cluster cross-tabulation."""
     filepath.parent.mkdir(parents=True, exist_ok=True)

@@ -10,7 +10,12 @@ from network_classifier.centrality import compute_centrality
 from network_classifier.classify import classify_edges, highway_cluster_crosstab
 from network_classifier.export import export_geopackage, export_graphml
 from network_classifier.graph import load_graph
-from network_classifier.plots import plot_crosstab_heatmap, plot_kde, plot_map
+from network_classifier.plots import (
+    plot_crosstab_heatmap,
+    plot_kde,
+    plot_map,
+    plot_umatrix,
+)
 
 console = Console()
 
@@ -52,7 +57,7 @@ def main() -> None:
         "-m",
         "--method",
         default=None,
-        choices=["gmm", "kmeans"],
+        choices=["gmm", "kmeans", "som"],
         help="Clustering method (default: no clustering)",
     )
     parser.add_argument(
@@ -80,7 +85,9 @@ def main() -> None:
         console.log(
             f"Classifying edges using [bold]{args.method.upper()}[/bold]..."
         )
-        G, k, model_metrics = classify_edges(G, args.method, args.n_clusters)
+        G, k, model_metrics, extras = classify_edges(
+            G, args.method, args.n_clusters
+        )
         console.log(
             f"[green]Classification complete.[/green] "
             f"Selected [bold]{k}[/bold] clusters"
@@ -104,6 +111,14 @@ def main() -> None:
         heatmap_path = plot_dir / "highway_cluster_heatmap.png"
         plot_crosstab_heatmap(ct, heatmap_path)
         console.log(f"  Saved [bold]{heatmap_path}[/bold]")
+
+        if args.method == "som":
+            umatrix_path = plot_dir / "umatrix.png"
+            console.log("Generating SOM U-matrix...")
+            plot_umatrix(
+                extras["som"], extras["neuron_label_grid"], umatrix_path, k
+            )
+            console.log(f"  Saved [bold]{umatrix_path}[/bold]")
 
     console.log(f"Exporting to [bold]{output}[/bold]...")
     if args.format == "graphml":
@@ -130,11 +145,18 @@ def _print_model_metrics(method: str, metrics: dict) -> None:
         "aic": "AIC",
         "log_likelihood": "Log-Likelihood",
         "n_iter": "Iterations",
+        "quantization_error": "Quantization Error",
+        "topographic_error": "Topographic Error",
+        "grid_side": "Grid Side",
+        "n_neurons": "Neurons",
+        "kmeans_silhouette": "KMeans Silhouette (codebook)",
+        "kmeans_inertia": "KMeans Inertia (codebook)",
     }
+    int_keys = {"n_iter", "grid_side", "n_neurons"}
 
     for key, value in metrics.items():
         label = labels.get(key, key)
-        if key == "n_iter":
+        if key in int_keys:
             table.add_row(label, str(value))
         else:
             table.add_row(label, f"{value:.4f}")

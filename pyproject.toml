@@ -8,6 +8,7 @@ dependencies = [
     "contextily>=1.6.0",
     "jupyter>=1.1.1",
     "matplotlib>=3.8.0",
+    "minisom>=2.3.3",
     "networkit>=11.2.1",
     "osmnx>=2.1.0",
     "pandas>=2.0.0",

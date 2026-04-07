@@ -1245,6 +1245,12 @@ wheels = [
 ]
 
 [[package]]
+name = "minisom"
+version = "2.3.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/9c/999bc2f1bee4cfbb6157ac03db32f5a831322479151941bc997774c405c6/minisom-2.3.6.tar.gz", hash = "sha256:1fca9cfeef62b221a89930ad3422b7a24a2bd66ae43ef97332e165f5975c09f1", size = 13140, upload-time = "2026-02-11T12:04:56.267Z" }
+
+[[package]]
 name = "mistune"
 version = "3.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1325,8 +1331,10 @@ dependencies = [
     { name = "contextily" },
     { name = "jupyter" },
     { name = "matplotlib" },
+    { name = "minisom" },
     { name = "networkit" },
     { name = "osmnx" },
+    { name = "pandas" },
     { name = "rich" },
     { name = "scikit-learn" },
 ]
@@ -1336,8 +1344,10 @@ requires-dist = [
     { name = "contextily", specifier = ">=1.6.0" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "matplotlib", specifier = ">=3.8.0" },
+    { name = "minisom", specifier = ">=2.3.3" },
     { name = "networkit", specifier = ">=11.2.1" },
     { name = "osmnx", specifier = ">=2.1.0" },
+    { name = "pandas", specifier = ">=2.0.0" },
     { name = "rich", specifier = ">=14.0.0" },
     { name = "scikit-learn", specifier = ">=1.4.0" },
 ]
