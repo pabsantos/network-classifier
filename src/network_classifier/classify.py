@@ -44,7 +44,7 @@ def _find_best_k(
 def _train_som(
     X: np.ndarray, random_seed: int = 42
 ) -> tuple[MiniSom, int]:
-    """Train a SOM with a heuristic rectangular grid.
+    """Train a SOM with a heuristic hexagonal grid.
 
     Grid side is derived from the rule of thumb ``5 * sqrt(N)`` total
     neurons, where N is the number of samples. The side is clamped to
@@ -61,7 +61,7 @@ def _train_som(
         input_len=n_features,
         sigma=1.0,
         learning_rate=0.5,
-        topology="rectangular",
+        topology="hexagonal",
         random_seed=random_seed,
     )
     som.pca_weights_init(X)

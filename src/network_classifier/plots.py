@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import ListedColormap, Normalize
+from matplotlib.patches import RegularPolygon
 from scipy.stats import gaussian_kde
 import osmnx as ox
 
@@ -137,6 +138,9 @@ def plot_umatrix(
 ) -> None:
     """Save a U-matrix of the trained SOM alongside neuron-cluster assignments.
 
+    Renders the hexagonal SOM grid as actual hexagons (pointy-top), using the
+    Euclidean coordinates returned by ``som.get_euclidean_coordinates()``.
+
     Left panel: U-matrix (normalized inter-neuron distances). Darker cells
     indicate larger gaps between neighbouring neurons — i.e. cluster borders.
     Right panel: cluster id assigned to each neuron after the second-stage
@@ -145,32 +149,76 @@ def plot_umatrix(
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
     umatrix = som.distance_map()
+    xx, yy = som.get_euclidean_coordinates()
+    grid_x, grid_y = umatrix.shape
+
+    # Pointy-top hexagons whose horizontal width equals 1 (matching minisom's
+    # unit spacing between neurons in the same row).
+    hex_radius = 1.0 / np.sqrt(3)
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-    im0 = axes[0].imshow(umatrix.T, cmap="bone_r", origin="lower")
-    axes[0].set_title("U-Matrix \u2014 neuron distances")
-    axes[0].set_xlabel("Grid X")
-    axes[0].set_ylabel("Grid Y")
-    fig.colorbar(im0, ax=axes[0], label="Normalized distance")
+    # ---- Left: U-matrix ----
+    norm = Normalize(vmin=float(umatrix.min()), vmax=float(umatrix.max()))
+    cmap_u = plt.get_cmap("bone_r")
 
-    cmap = ListedColormap(_cluster_colors(n_clusters))
-    im1 = axes[1].imshow(
-        neuron_label_grid.T,
-        cmap=cmap,
-        origin="lower",
-        vmin=-0.5,
-        vmax=n_clusters - 0.5,
-    )
+    for i in range(grid_x):
+        for j in range(grid_y):
+            axes[0].add_patch(
+                RegularPolygon(
+                    (xx[i, j], yy[i, j]),
+                    numVertices=6,
+                    radius=hex_radius,
+                    orientation=0.0,
+                    facecolor=cmap_u(norm(umatrix[i, j])),
+                    edgecolor="gray",
+                    linewidth=0.3,
+                )
+            )
+
+    _setup_hex_axis(axes[0], xx, yy)
+    axes[0].set_title("U-Matrix \u2014 neuron distances")
+    sm_u = plt.cm.ScalarMappable(cmap=cmap_u, norm=norm)
+    fig.colorbar(sm_u, ax=axes[0], label="Normalized distance")
+
+    # ---- Right: cluster assignment per neuron ----
+    cluster_colors = _cluster_colors(n_clusters)
+    cluster_cmap = ListedColormap(cluster_colors)
+    cluster_norm = Normalize(vmin=-0.5, vmax=n_clusters - 0.5)
+
+    for i in range(grid_x):
+        for j in range(grid_y):
+            axes[1].add_patch(
+                RegularPolygon(
+                    (xx[i, j], yy[i, j]),
+                    numVertices=6,
+                    radius=hex_radius,
+                    orientation=0.0,
+                    facecolor=cluster_colors[int(neuron_label_grid[i, j])],
+                    edgecolor="white",
+                    linewidth=0.5,
+                )
+            )
+
+    _setup_hex_axis(axes[1], xx, yy)
     axes[1].set_title("SOM neurons \u2014 cluster assignment")
-    axes[1].set_xlabel("Grid X")
-    axes[1].set_ylabel("Grid Y")
-    cbar = fig.colorbar(im1, ax=axes[1], ticks=range(n_clusters))
+    sm_c = plt.cm.ScalarMappable(cmap=cluster_cmap, norm=cluster_norm)
+    cbar = fig.colorbar(sm_c, ax=axes[1], ticks=range(n_clusters))
     cbar.set_label("Cluster")
 
     fig.tight_layout()
     fig.savefig(filepath, dpi=150)
     plt.close(fig)
+
+
+def _setup_hex_axis(ax, xx: np.ndarray, yy: np.ndarray) -> None:
+    """Configure axis limits and aspect ratio for a hex SOM panel."""
+    margin = 1.0
+    ax.set_xlim(float(xx.min()) - margin, float(xx.max()) + margin)
+    ax.set_ylim(float(yy.min()) - margin, float(yy.max()) + margin)
+    ax.set_aspect("equal")
+    ax.set_xlabel("Grid X")
+    ax.set_ylabel("Grid Y")
 
 
 def plot_crosstab_heatmap(ct: pd.DataFrame, filepath: Path) -> None:
