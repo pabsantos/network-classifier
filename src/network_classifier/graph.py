@@ -19,4 +19,12 @@ def load_graph(place: str, network_type: str = "drive") -> nx.MultiDiGraph:
     nx.MultiDiGraph
         The street network graph.
     """
-    return ox.graph_from_place(place, network_type=network_type)
+    G = ox.graph_from_place(place, network_type=network_type)
+    # Consolidate nearby intersections (e.g. dual carriageways, complex
+    # junctions) into single nodes so centrality reflects topology rather
+    # than OSM digitisation artifacts. Requires a projected graph.
+    G_proj = ox.project_graph(G)
+    G = ox.consolidate_intersections(
+        G_proj, tolerance=15, rebuild_graph=True, dead_ends=False
+    )
+    return G
