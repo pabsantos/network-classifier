@@ -7,7 +7,7 @@ from minisom import MiniSom
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
 from sklearn.metrics import silhouette_score
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 METRICS = ("betweenness", "closeness", "degree")
 
@@ -155,16 +155,22 @@ def classify_edges(
         features.append([data[m] for m in METRICS])
 
     X = np.array(features)
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    # Betweenness is heavily right-skewed; log1p compresses the tail before
+    # any downstream scaling.
+    bet_idx = METRICS.index("betweenness")
+    X[:, bet_idx] = np.log1p(X[:, bet_idx])
 
     extras: dict = {}
 
     if method == "som":
+        # SOMs work better with bounded inputs.
+        X_som = MinMaxScaler().fit_transform(X)
         labels, n_clusters, model_metrics, extras = _classify_with_som(
-            X_scaled, n_clusters
+            X_som, n_clusters
         )
     elif method == "kmeans":
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
         if n_clusters is None:
             n_clusters = _find_best_k(X_scaled, method)
         model = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
@@ -175,6 +181,8 @@ def classify_edges(
             "n_iter": int(model.n_iter_),
         }
     else:
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
         if n_clusters is None:
             n_clusters = _find_best_k(X_scaled, method)
         model = GaussianMixture(n_components=n_clusters, random_state=42)
