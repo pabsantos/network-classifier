@@ -57,7 +57,7 @@ def main() -> None:
         "-m",
         "--method",
         default=None,
-        choices=["gmm", "kmeans", "som"],
+        choices=["kmeans", "som"],
         help="Clustering method (default: no clustering)",
     )
     parser.add_argument(
@@ -141,9 +141,6 @@ def _print_model_metrics(method: str, metrics: dict) -> None:
     labels = {
         "inertia": "Inertia",
         "silhouette_score": "Silhouette Score",
-        "bic": "BIC",
-        "aic": "AIC",
-        "log_likelihood": "Log-Likelihood",
         "n_iter": "Iterations",
         "quantization_error": "Quantization Error",
         "topographic_error": "Topographic Error",

@@ -23,14 +23,14 @@ pip install .
 # Basic: compute centrality and export
 network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg
 
-# With clustering (GMM, auto-select best k)
-network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m gmm
+# With clustering (K-Means, auto-select best k)
+network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m kmeans
 
-# With clustering (K-Means, fixed k)
-network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m kmeans -k 5
+# With clustering (SOM, fixed k)
+network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m som -k 5
 
 # GraphML output
-network-classifier "Curitiba, Brazil" -f graphml -o output.graphml -m gmm -k 4
+network-classifier "Curitiba, Brazil" -f graphml -o output.graphml -m kmeans -k 4
 ```
 
 ### Arguments
@@ -41,12 +41,10 @@ network-classifier "Curitiba, Brazil" -f graphml -o output.graphml -m gmm -k 4
 | `-f, --format` | Output format: `graphml` or `gpkg` | required |
 | `-o, --output` | Output file path | derived from city name |
 | `-n, --network-type` | Network type: `drive`, `walk`, `bike`, `all` | `drive` |
-| `-m, --method` | Clustering method: `gmm` or `kmeans` | no clustering |
+| `-m, --method` | Clustering method: `kmeans` or `som` | no clustering |
 | `-k, --n-clusters` | Number of clusters | auto-select best k |
 
-When `-k` is omitted, the best k is selected automatically by testing k=2..10:
-- **K-Means**: highest silhouette score
-- **GMM**: lowest BIC
+When `-k` is omitted, the best k is selected automatically by testing k=2..10 using the highest silhouette score.
 
 ## Output
 
@@ -67,7 +65,7 @@ When clustering is enabled, the tool prints:
 
 **Model metrics** -- evaluation coefficients of the fitted model:
 - K-Means: Inertia, Silhouette Score, Iterations
-- GMM: BIC, AIC, Log-Likelihood, Iterations
+- SOM: Quantization Error, Topographic Error, Grid Side, Neurons, KMeans Silhouette/Inertia (codebook)
 
 **Cluster distribution** -- per-cluster summary (mean, std, min, max) of each centrality metric.
 

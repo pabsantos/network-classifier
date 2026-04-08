@@ -5,7 +5,6 @@ import pandas as pd
 import networkx as nx
 from minisom import MiniSom
 from sklearn.cluster import KMeans
-from sklearn.mixture import GaussianMixture
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
@@ -13,31 +12,16 @@ METRICS = ("betweenness", "closeness", "degree")
 
 
 def _find_best_k(
-    X: np.ndarray, method: str, k_range: range = range(2, 11)
+    X: np.ndarray, k_range: range = range(2, 11)
 ) -> int:
-    """Select the best number of clusters automatically.
-
-    K-Means: highest silhouette score.
-    GMM: lowest BIC.
-    """
-    if method == "kmeans":
-        best_k, best_score = 2, -1.0
-        for k in k_range:
-            km = KMeans(n_clusters=k, random_state=42, n_init="auto")
-            labels = km.fit_predict(X)
-            score = silhouette_score(X, labels)
-            if score > best_score:
-                best_k, best_score = k, score
-        return best_k
-
-    # GMM — lowest BIC
-    best_k, best_bic = 2, np.inf
+    """Select the best number of clusters by highest silhouette score."""
+    best_k, best_score = 2, -1.0
     for k in k_range:
-        gm = GaussianMixture(n_components=k, random_state=42)
-        gm.fit(X)
-        bic = gm.bic(X)
-        if bic < best_bic:
-            best_k, best_bic = k, bic
+        km = KMeans(n_clusters=k, random_state=42, n_init="auto")
+        labels = km.fit_predict(X)
+        score = silhouette_score(X, labels)
+        if score > best_score:
+            best_k, best_score = k, score
     return best_k
 
 
@@ -86,7 +70,7 @@ def _classify_with_som(
     codebook = weights.reshape(-1, weights.shape[-1])
 
     if n_clusters is None:
-        n_clusters = _find_best_k(codebook, "kmeans")
+        n_clusters = _find_best_k(codebook)
     elif n_clusters > codebook.shape[0]:
         raise ValueError(
             f"n_clusters ({n_clusters}) exceeds number of SOM neurons "
@@ -135,7 +119,7 @@ def classify_edges(
     G : nx.MultiDiGraph
         Graph with "betweenness", "closeness", and "degree" edge attributes.
     method : str
-        Clustering method: "kmeans", "gmm", or "som".
+        Clustering method: "kmeans" or "som".
     n_clusters : int or None
         Number of clusters. If None, the best k is selected automatically.
 
@@ -144,7 +128,7 @@ def classify_edges(
     tuple[nx.MultiDiGraph, int, dict[str, float], dict]
         The graph with a "cluster" attribute on each edge, the number of
         clusters used, a dict of model metrics, and a dict of method-specific
-        extras (empty for kmeans/gmm; contains the trained SOM and the
+        extras (empty for kmeans; contains the trained SOM and the
         neuron-to-cluster grid for som).
     """
     edge_order: list[tuple[int, int, int]] = []
@@ -172,7 +156,7 @@ def classify_edges(
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         if n_clusters is None:
-            n_clusters = _find_best_k(X_scaled, method)
+            n_clusters = _find_best_k(X_scaled)
         model = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
         labels = model.fit_predict(X_scaled)
         model_metrics = {
@@ -181,18 +165,7 @@ def classify_edges(
             "n_iter": int(model.n_iter_),
         }
     else:
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        if n_clusters is None:
-            n_clusters = _find_best_k(X_scaled, method)
-        model = GaussianMixture(n_components=n_clusters, random_state=42)
-        labels = model.fit_predict(X_scaled)
-        model_metrics = {
-            "bic": float(model.bic(X_scaled)),
-            "aic": float(model.aic(X_scaled)),
-            "log_likelihood": float(model.score(X_scaled) * X_scaled.shape[0]),
-            "n_iter": int(model.n_iter_),
-        }
+        raise ValueError(f"Unknown method: {method}")
 
     for i, (u, v, key) in enumerate(edge_order):
         G[u][v][key]["cluster"] = int(labels[i])
