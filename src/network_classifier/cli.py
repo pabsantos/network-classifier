@@ -47,13 +47,6 @@ def main() -> None:
         help="Output file path (default: derived from city name)",
     )
     parser.add_argument(
-        "-n",
-        "--network-type",
-        default="drive",
-        choices=["drive", "walk", "bike", "all"],
-        help="Network type (default: drive)",
-    )
-    parser.add_argument(
         "-m",
         "--method",
         default=None,
@@ -73,8 +66,8 @@ def main() -> None:
     output = args.output or _default_output(args.city, args.format)
     output_path = Path(output)
 
-    console.log(f"Loading graph for [bold]{args.city}[/bold] (network_type={args.network_type})...")
-    G = load_graph(args.city, args.network_type)
+    console.log(f"Loading graph for [bold]{args.city}[/bold]...")
+    G = load_graph(args.city, "drive")
     console.log(f"Graph loaded: [green]{G.number_of_nodes()}[/green] nodes, [green]{G.number_of_edges()}[/green] edges")
 
     console.log("Computing centrality metrics (betweenness, closeness, degree)...")
