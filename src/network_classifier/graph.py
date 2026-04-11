@@ -25,6 +25,6 @@ def load_graph(place: str, network_type: str = "drive") -> nx.MultiDiGraph:
     # than OSM digitisation artifacts. Requires a projected graph.
     G_proj = ox.project_graph(G)
     G = ox.consolidate_intersections(
-        G_proj, tolerance=15, rebuild_graph=True, dead_ends=False
+        G_proj, tolerance=15, rebuild_graph=True, dead_ends=True
     )
     return G

@@ -126,7 +126,7 @@ def plot_map(G: nx.MultiDiGraph, filepath: Path) -> None:
     ax.set_axis_off()
     ax.set_title("Road Network \u2014 Clusters")
     fig.tight_layout()
-    fig.savefig(filepath, dpi=150)
+    fig.savefig(filepath, dpi=300)
     plt.close(fig)
 
 
