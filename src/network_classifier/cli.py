@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 from network_classifier.centrality import compute_centrality
 from network_classifier.classify import classify_edges, highway_cluster_crosstab
-from network_classifier.export import export_geopackage, export_graphml
+from network_classifier.export import export_geopackage, export_graphml, export_txt
 from network_classifier.graph import load_graph
 from network_classifier.plots import (
     plot_crosstab_heatmap,
@@ -112,6 +112,16 @@ def main() -> None:
                 extras["som"], extras["neuron_label_grid"], umatrix_path, k
             )
             console.log(f"  Saved [bold]{umatrix_path}[/bold]")
+
+        txt_path = plot_dir / "model_metrics.txt"
+        export_txt(
+            txt_path,
+            city=args.city,
+            method=args.method,
+            n_clusters=k,
+            model_metrics=model_metrics,
+        )
+        console.log(f"  Saved [bold]{txt_path}[/bold]")
 
     console.log(f"Exporting to [bold]{output}[/bold]...")
     if args.format == "graphml":
