@@ -38,7 +38,8 @@ def plot_kde(G: nx.MultiDiGraph, output_dir: Path) -> list[Path]:
     """Save kernel density plots for each centrality metric, grouped by cluster.
 
     One PNG per metric is saved in *output_dir*, named ``<metric>_kde.png``.
-    The betweenness plot uses a log-scaled x-axis.
+    The betweenness and clustering plots use a log-scaled x-axis (zero
+    values are excluded from the KDE since log(0) is undefined).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -57,7 +58,7 @@ def plot_kde(G: nx.MultiDiGraph, output_dir: Path) -> list[Path]:
     saved: list[Path] = []
     for metric in METRICS:
         fig, ax = plt.subplots(figsize=(8, 5))
-        use_log = metric == "betweenness"
+        use_log = metric in ("betweenness", "clustering")
 
         for idx, cid in enumerate(sorted_ids):
             vals = np.array(clusters[cid][metric])

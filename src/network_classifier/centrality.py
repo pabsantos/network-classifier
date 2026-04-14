@@ -7,9 +7,10 @@ import networkx as nx
 def compute_centrality(G: nx.MultiDiGraph) -> nx.MultiDiGraph:
     """Compute centrality metrics and store them as edge attributes.
 
-    Computes edge betweenness centrality directly on edges, and local
-    clustering coefficient and degree (non-normalized) on nodes — each
-    assigned to edges as the mean of the two endpoints.
+    Computes edge betweenness centrality directly on edges. Local
+    clustering coefficient is assigned to edges as the mean of the two
+    endpoints; degree (non-normalized) is assigned as the sum of the two
+    endpoints.
 
     Manually converts the NetworkX MultiDiGraph to a weighted NetworKit
     graph to maintain edge mapping (nk.nxadapter.nx2nk does not support
@@ -70,16 +71,18 @@ def compute_centrality(G: nx.MultiDiGraph) -> nx.MultiDiGraph:
     lcc.run()
     clustering_scores = lcc.scores()
 
-    # Step 5: Degree centrality (node-level, non-normalized)
-    dc = nk.centrality.DegreeCentrality(nk_graph, normalized=False)
-    dc.run()
-    degree_scores = dc.scores()
+    # Step 5: Total degree per node (in + out, non-normalized).
+    # DegreeCentrality on a directed graph only counts out-edges, so
+    # sum in- and out-degree explicitly.
+    degree_scores = [
+        nk_graph.degreeIn(i) + nk_graph.degreeOut(i) for i in range(n)
+    ]
 
     # Step 6: Assign node metrics to edges as mean of endpoints
     for u, v, key in G.edges(keys=True):
         u_idx = node_id_to_idx[u]
         v_idx = node_id_to_idx[v]
         G[u][v][key]["clustering"] = (clustering_scores[u_idx] + clustering_scores[v_idx]) / 2
-        G[u][v][key]["degree"] = (degree_scores[u_idx] + degree_scores[v_idx]) / 2
+        G[u][v][key]["degree"] = degree_scores[u_idx] + degree_scores[v_idx]
 
     return G
