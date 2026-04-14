@@ -8,7 +8,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-METRICS = ("betweenness", "closeness", "degree")
+METRICS = ("betweenness", "clustering", "degree")
 
 
 def _find_best_k(
@@ -117,7 +117,8 @@ def classify_edges(
     Parameters
     ----------
     G : nx.MultiDiGraph
-        Graph with "betweenness", "closeness", and "degree" edge attributes.
+        Graph with "betweenness", "clustering", and "degree" edge
+        attributes.
     method : str
         Clustering method: "kmeans" or "som".
     n_clusters : int or None
@@ -139,8 +140,8 @@ def classify_edges(
         features.append([data[m] for m in METRICS])
 
     X = np.array(features)
-    # Betweenness is heavily right-skewed; log1p compresses the tail before
-    # any downstream scaling.
+    # Betweenness is heavily right-skewed; log1p compresses the tail
+    # before any downstream scaling.
     bet_idx = METRICS.index("betweenness")
     X[:, bet_idx] = np.log1p(X[:, bet_idx])
 

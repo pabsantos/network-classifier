@@ -70,7 +70,7 @@ def main() -> None:
     G = load_graph(args.city, "drive")
     console.log(f"Graph loaded: [green]{G.number_of_nodes()}[/green] nodes, [green]{G.number_of_edges()}[/green] edges")
 
-    console.log("Computing centrality metrics (betweenness, closeness, degree)...")
+    console.log("Computing centrality metrics (betweenness, clustering, degree)...")
     G = compute_centrality(G)
     console.log("[green]Centrality metrics computed.[/green]")
 
