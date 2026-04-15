@@ -10,19 +10,39 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 METRICS = ("betweenness", "clustering", "degree")
 
+# Cap the number of samples used when computing silhouette scores.
+# silhouette_score is O(n^2) in memory/time via pairwise distances, so we
+# sub-sample to keep runtime bounded on large road networks. sklearn
+# automatically uses all samples if n < SILHOUETTE_SAMPLE_SIZE.
+SILHOUETTE_SAMPLE_SIZE = 5000
 
-def _find_best_k(
+
+def _silhouette_scores(
     X: np.ndarray, k_range: range = range(2, 11)
-) -> int:
-    """Select the best number of clusters by highest silhouette score."""
-    best_k, best_score = 2, -1.0
+) -> dict[int, float]:
+    """Compute the silhouette score for KMeans at each k in ``k_range``."""
+    scores: dict[int, float] = {}
     for k in k_range:
         km = KMeans(n_clusters=k, random_state=42, n_init="auto")
         labels = km.fit_predict(X)
-        score = silhouette_score(X, labels)
-        if score > best_score:
-            best_k, best_score = k, score
-    return best_k
+        scores[k] = float(
+            silhouette_score(
+                X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
+            )
+        )
+    return scores
+
+
+def _find_best_k(
+    X: np.ndarray, k_range: range = range(2, 11)
+) -> tuple[int, dict[int, float]]:
+    """Select the best number of clusters by highest silhouette score.
+
+    Returns the chosen k and the full ``{k: score}`` mapping.
+    """
+    scores = _silhouette_scores(X, k_range)
+    best_k = max(scores, key=scores.__getitem__)
+    return best_k, scores
 
 
 def _train_som(
@@ -70,12 +90,15 @@ def _classify_with_som(
     codebook = weights.reshape(-1, weights.shape[-1])
 
     if n_clusters is None:
-        n_clusters = _find_best_k(codebook)
-    elif n_clusters > codebook.shape[0]:
-        raise ValueError(
-            f"n_clusters ({n_clusters}) exceeds number of SOM neurons "
-            f"({codebook.shape[0]})"
-        )
+        n_clusters, silhouette_scores = _find_best_k(codebook)
+    else:
+        if n_clusters > codebook.shape[0]:
+            raise ValueError(
+                f"n_clusters ({n_clusters}) exceeds number of SOM neurons "
+                f"({codebook.shape[0]})"
+            )
+        max_k = min(10, codebook.shape[0] - 1)
+        silhouette_scores = _silhouette_scores(codebook, range(2, max_k + 1))
 
     km = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
     neuron_labels = km.fit_predict(codebook)
@@ -104,6 +127,7 @@ def _classify_with_som(
         "som": som,
         "neuron_label_grid": neuron_label_grid,
         "grid_side": grid_side,
+        "silhouette_scores": silhouette_scores,
     }
 
     return sample_labels, n_clusters, model_metrics, extras
@@ -157,14 +181,24 @@ def classify_edges(
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         if n_clusters is None:
-            n_clusters = _find_best_k(X_scaled)
+            n_clusters, silhouette_scores = _find_best_k(X_scaled)
+        else:
+            silhouette_scores = _silhouette_scores(X_scaled)
         model = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
         labels = model.fit_predict(X_scaled)
         model_metrics = {
             "inertia": float(model.inertia_),
-            "silhouette_score": float(silhouette_score(X_scaled, labels)),
+            "silhouette_score": float(
+                silhouette_score(
+                    X_scaled,
+                    labels,
+                    sample_size=SILHOUETTE_SAMPLE_SIZE,
+                    random_state=42,
+                )
+            ),
             "n_iter": int(model.n_iter_),
         }
+        extras["silhouette_scores"] = silhouette_scores
     else:
         raise ValueError(f"Unknown method: {method}")
 

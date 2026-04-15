@@ -14,6 +14,7 @@ from network_classifier.plots import (
     plot_crosstab_heatmap,
     plot_kde,
     plot_map,
+    plot_silhouette_vs_k,
     plot_umatrix,
 )
 
@@ -98,6 +99,14 @@ def main() -> None:
         console.log("Generating cluster map...")
         plot_map(G, map_path)
         console.log(f"  Saved [bold]{map_path}[/bold]")
+
+        if "silhouette_scores" in extras:
+            silhouette_path = plot_dir / "silhouette_vs_k.png"
+            console.log("Generating silhouette score vs k plot...")
+            plot_silhouette_vs_k(
+                extras["silhouette_scores"], k, silhouette_path
+            )
+            console.log(f"  Saved [bold]{silhouette_path}[/bold]")
 
         console.log("Generating highway x cluster heatmap...")
         ct = highway_cluster_crosstab(G)
