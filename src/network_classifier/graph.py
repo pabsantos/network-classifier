@@ -27,4 +27,9 @@ def load_graph(place: str, network_type: str = "drive") -> nx.MultiDiGraph:
     G = ox.consolidate_intersections(
         G_proj, tolerance=15, rebuild_graph=True, dead_ends=True
     )
+    # Consolidation marks the graph as unsimplified; collapse any degree-2
+    # chains that remain between consolidated nodes so edges map 1:1 to
+    # logical road segments.
+    if not G.graph.get("simplified"):
+        G = ox.simplify_graph(G)
     return G
