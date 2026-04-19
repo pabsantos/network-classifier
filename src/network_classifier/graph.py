@@ -1,25 +1,14 @@
 """Load street network graphs via OSMnx."""
 
+import json
+from pathlib import Path
+
 import networkx as nx
 import osmnx as ox
+from shapely.geometry import shape
 
 
-def load_graph(place: str, network_type: str = "drive") -> nx.MultiDiGraph:
-    """Download a street network graph for the given place.
-
-    Parameters
-    ----------
-    place : str
-        Name of the city/region (e.g. "Curitiba, Brazil").
-    network_type : str
-        One of "drive", "walk", "bike", "all".
-
-    Returns
-    -------
-    nx.MultiDiGraph
-        The street network graph.
-    """
-    G = ox.graph_from_place(place, network_type=network_type)
+def _consolidate(G: nx.MultiDiGraph) -> nx.MultiDiGraph:
     # Consolidate nearby intersections (e.g. dual carriageways, complex
     # junctions) into single nodes so centrality reflects topology rather
     # than OSM digitisation artifacts. Requires a projected graph.
@@ -33,3 +22,37 @@ def load_graph(place: str, network_type: str = "drive") -> nx.MultiDiGraph:
     if not G.graph.get("simplified"):
         G = ox.simplify_graph(G)
     return G
+
+
+def load_graph(place: str, network_type: str = "drive") -> nx.MultiDiGraph:
+    G = ox.graph_from_place(place, network_type=network_type)
+    return _consolidate(G)
+
+
+def load_graph_from_bbox(
+    north: float,
+    south: float,
+    east: float,
+    west: float,
+    network_type: str = "drive",
+) -> nx.MultiDiGraph:
+    G = ox.graph_from_bbox(
+        (north, south, east, west), network_type=network_type
+    )
+    return _consolidate(G)
+
+
+def load_graph_from_polygon(
+    polygon_path: str | Path, network_type: str = "drive"
+) -> nx.MultiDiGraph:
+    data = json.loads(Path(polygon_path).read_text())
+    # Accept a Feature, FeatureCollection (first feature), or bare geometry.
+    if data.get("type") == "FeatureCollection":
+        geom = data["features"][0]["geometry"]
+    elif data.get("type") == "Feature":
+        geom = data["geometry"]
+    else:
+        geom = data
+    polygon = shape(geom)
+    G = ox.graph_from_polygon(polygon, network_type=network_type)
+    return _consolidate(G)

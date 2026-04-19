@@ -9,7 +9,11 @@ from rich.table import Table
 from network_classifier.centrality import compute_centrality
 from network_classifier.classify import classify_edges, highway_cluster_crosstab
 from network_classifier.export import export_geopackage, export_graphml, export_txt
-from network_classifier.graph import load_graph
+from network_classifier.graph import (
+    load_graph,
+    load_graph_from_bbox,
+    load_graph_from_polygon,
+)
 from network_classifier.plots import (
     plot_crosstab_heatmap,
     plot_kde,
@@ -21,9 +25,8 @@ from network_classifier.plots import (
 console = Console()
 
 
-def _default_output(city: str, fmt: str) -> str:
-    """Generate a default output filename from the city name."""
-    slug = re.sub(r"[^a-z0-9]+", "_", city.lower()).strip("_")
+def _default_output(label: str, fmt: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
     ext = "graphml" if fmt == "graphml" else "gpkg"
     return f"{slug}.{ext}"
 
@@ -33,7 +36,27 @@ def main() -> None:
         prog="network-classifier",
         description="Classify road networks using edge betweenness centrality.",
     )
-    parser.add_argument("city", help='City name (e.g. "Curitiba, Brazil")')
+
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
+        "city",
+        nargs="?",
+        default=None,
+        help='City name (e.g. "Curitiba, Brazil")',
+    )
+    source.add_argument(
+        "--bbox",
+        nargs=4,
+        type=float,
+        metavar=("NORTH", "SOUTH", "EAST", "WEST"),
+        help="Bounding box as four floats: north south east west",
+    )
+    source.add_argument(
+        "--polygon",
+        metavar="FILE",
+        help="Path to a GeoJSON file whose first polygon defines the boundary",
+    )
+
     parser.add_argument(
         "-f",
         "--format",
@@ -45,7 +68,7 @@ def main() -> None:
         "-o",
         "--output",
         default=None,
-        help="Output file path (default: derived from city name)",
+        help="Output file path (default: derived from input name)",
     )
     parser.add_argument(
         "-m",
@@ -64,11 +87,27 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    output = args.output or _default_output(args.city, args.format)
-    output_path = Path(output)
-
-    console.log(f"Loading graph for [bold]{args.city}[/bold]...")
-    G = load_graph(args.city, "drive")
+    if args.bbox is not None:
+        north, south, east, west = args.bbox
+        label = f"bbox_{north}_{south}_{east}_{west}"
+        output = args.output or _default_output(label, args.format)
+        output_path = Path(output)
+        console.log(
+            f"Loading graph for bbox [bold]{north}, {south}, {east}, {west}[/bold]..."
+        )
+        G = load_graph_from_bbox(north, south, east, west, "drive")
+    elif args.polygon is not None:
+        label = Path(args.polygon).stem
+        output = args.output or _default_output(label, args.format)
+        output_path = Path(output)
+        console.log(f"Loading graph from polygon [bold]{args.polygon}[/bold]...")
+        G = load_graph_from_polygon(args.polygon, "drive")
+    else:
+        label = args.city
+        output = args.output or _default_output(label, args.format)
+        output_path = Path(output)
+        console.log(f"Loading graph for [bold]{label}[/bold]...")
+        G = load_graph(label, "drive")
     console.log(f"Graph loaded: [green]{G.number_of_nodes()}[/green] nodes, [green]{G.number_of_edges()}[/green] edges")
 
     console.log("Computing centrality metrics (betweenness, clustering, degree)...")
@@ -125,7 +164,7 @@ def main() -> None:
         txt_path = plot_dir / "model_metrics.txt"
         export_txt(
             txt_path,
-            city=args.city,
+            city=label,
             method=args.method,
             n_clusters=k,
             model_metrics=model_metrics,
