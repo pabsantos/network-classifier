@@ -74,7 +74,7 @@ def main() -> None:
         "-m",
         "--method",
         default=None,
-        choices=["kmeans", "som"],
+        choices=["kmeans", "som", "fkmeans"],
         help="Clustering method (default: no clustering)",
     )
     parser.add_argument(
@@ -199,6 +199,7 @@ def _print_model_metrics(method: str, metrics: dict) -> None:
         "n_neurons": "Neurons",
         "kmeans_silhouette": "KMeans Silhouette (codebook)",
         "kmeans_inertia": "KMeans Inertia (codebook)",
+        "fpc": "Fuzzy Partition Coefficient",
     }
     int_keys = {"n_iter", "grid_side", "n_neurons"}
 

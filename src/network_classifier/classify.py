@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import networkx as nx
+import skfuzzy as fuzz
 from minisom import MiniSom
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
@@ -43,6 +44,76 @@ def _find_best_k(
     scores = _silhouette_scores(X, k_range)
     best_k = max(scores, key=scores.__getitem__)
     return best_k, scores
+
+
+def _fkmeans_silhouette_scores(
+    X: np.ndarray, k_range: range = range(2, 11), m: float = 2.0
+) -> dict[int, float]:
+    """Compute silhouette scores for Fuzzy K-Means at each k in ``k_range``."""
+    scores: dict[int, float] = {}
+    for k in k_range:
+        cntr, u, *_ = fuzz.cluster.cmeans(
+            X.T, c=k, m=m, error=0.005, maxiter=1000, seed=42
+        )
+        labels = np.argmax(u, axis=0)
+        if len(set(labels)) < 2:
+            continue
+        scores[k] = float(
+            silhouette_score(
+                X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
+            )
+        )
+    return scores
+
+
+def _classify_with_fkmeans(
+    X: np.ndarray, n_clusters: int | None, m: float = 2.0
+) -> tuple[np.ndarray, int, dict[str, float], dict]:
+    """Fuzzy K-Means clustering via skfuzzy cmeans.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Scaled feature matrix.
+    n_clusters : int or None
+        Number of clusters. If None, auto-selected by silhouette score.
+    m : float
+        Fuzziness exponent (default 2.0).
+
+    Returns
+    -------
+    tuple
+        (labels, n_clusters, model_metrics, extras)
+    """
+    if n_clusters is None:
+        n_clusters, silhouette_scores = (
+            lambda scores: (max(scores, key=scores.__getitem__), scores)
+        )(_fkmeans_silhouette_scores(X, m=m))
+    else:
+        silhouette_scores = _fkmeans_silhouette_scores(X, m=m)
+
+    cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(
+        X.T, c=n_clusters, m=m, error=0.005, maxiter=1000, seed=42
+    )
+    labels = np.argmax(u, axis=0)
+
+    model_metrics = {
+        "fpc": float(fpc),
+        "silhouette_score": float(
+            silhouette_score(
+                X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
+            )
+        ),
+        "n_iter": int(p),
+    }
+
+    extras: dict = {
+        "membership": u,
+        "centers": cntr,
+        "silhouette_scores": silhouette_scores,
+    }
+
+    return labels, n_clusters, model_metrics, extras
 
 
 def _train_som(
@@ -176,6 +247,12 @@ def classify_edges(
         X_som = MinMaxScaler().fit_transform(X)
         labels, n_clusters, model_metrics, extras = _classify_with_som(
             X_som, n_clusters
+        )
+    elif method == "fkmeans":
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        labels, n_clusters, model_metrics, extras = _classify_with_fkmeans(
+            X_scaled, n_clusters
         )
     elif method == "kmeans":
         scaler = StandardScaler()
