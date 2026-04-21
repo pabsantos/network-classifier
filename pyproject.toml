@@ -17,6 +17,9 @@ dependencies = [
     "scikit-learn>=1.4.0",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
 [project.scripts]
 network-classifier = "network_classifier.cli:main"
 
