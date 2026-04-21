@@ -18,6 +18,7 @@ from network_classifier.graph import (
 from network_classifier.plots import (
     plot_crosstab_heatmap,
     plot_dendrogram,
+    plot_elbow,
     plot_kde,
     plot_map,
     plot_silhouette_vs_k,
@@ -157,6 +158,12 @@ def main() -> None:
                 extras["silhouette_scores"], k, silhouette_path
             )
             console.log(f"  Saved [bold]{silhouette_path}[/bold]")
+
+        if "inertias" in extras:
+            elbow_path = plot_dir / "elbow.png"
+            console.log("Generating elbow plot...")
+            plot_elbow(extras["inertias"], k, elbow_path)
+            console.log(f"  Saved [bold]{elbow_path}[/bold]")
 
         console.log("Generating highway x cluster heatmap...")
         ct = highway_cluster_crosstab(G)

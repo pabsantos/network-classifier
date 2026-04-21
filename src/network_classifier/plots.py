@@ -348,6 +348,52 @@ def plot_dendrogram(
     plt.close(fig)
 
 
+def plot_elbow(
+    inertias: dict[int, float],
+    selected_k: int,
+    filepath: Path,
+) -> None:
+    """Save an elbow plot (inertia vs k), highlighting the selected k.
+
+    Parameters
+    ----------
+    inertias : dict[int, float]
+        Mapping of k to KMeans inertia.
+    selected_k : int
+        The k used for the final clustering (highlighted on the curve).
+    filepath : Path
+        Destination PNG path.
+    """
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+
+    ks = sorted(inertias)
+    values = [inertias[k] for k in ks]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(ks, values, marker="o", color="#4363d8", linewidth=2)
+
+    if selected_k in inertias:
+        ax.scatter(
+            [selected_k],
+            [inertias[selected_k]],
+            color="#e6194b",
+            s=120,
+            zorder=5,
+            label=f"Selected k = {selected_k}",
+        )
+        ax.axvline(selected_k, color="#e6194b", linestyle="--", alpha=0.4)
+
+    ax.set_xticks(ks)
+    ax.set_xlabel("Number of clusters (k)")
+    ax.set_ylabel("Inertia")
+    ax.set_title("Elbow Method")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(filepath, dpi=150)
+    plt.close(fig)
+
+
 def plot_crosstab_heatmap(ct: pd.DataFrame, filepath: Path) -> None:
     """Save a heatmap of the highway class x cluster cross-tabulation."""
     filepath.parent.mkdir(parents=True, exist_ok=True)

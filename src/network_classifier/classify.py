@@ -25,41 +25,52 @@ HC_METHODS = {
 SILHOUETTE_SAMPLE_SIZE = 5000
 
 
-def _silhouette_scores(
+def _kmeans_eval(
     X: np.ndarray, k_range: range = range(2, 11)
-) -> dict[int, float]:
-    """Compute the silhouette score for KMeans at each k in ``k_range``."""
-    scores: dict[int, float] = {}
+) -> tuple[dict[int, float], dict[int, float]]:
+    """Compute silhouette scores and inertias for KMeans at each k.
+
+    Returns ``(silhouette_scores, inertias)`` mappings.
+    """
+    sil_scores: dict[int, float] = {}
+    inertias: dict[int, float] = {}
     for k in k_range:
         km = KMeans(n_clusters=k, random_state=42, n_init="auto")
         labels = km.fit_predict(X)
-        scores[k] = float(
+        sil_scores[k] = float(
             silhouette_score(
                 X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
             )
         )
-    return scores
+        inertias[k] = float(km.inertia_)
+    return sil_scores, inertias
 
 
 def _find_best_k(
     X: np.ndarray, k_range: range = range(2, 11)
-) -> tuple[int, dict[int, float]]:
+) -> tuple[int, dict[int, float], dict[int, float]]:
     """Select the best number of clusters by highest silhouette score.
 
-    Returns the chosen k and the full ``{k: score}`` mapping.
+    Returns the chosen k, the ``{k: silhouette}`` mapping, and the
+    ``{k: inertia}`` mapping.
     """
-    scores = _silhouette_scores(X, k_range)
-    best_k = max(scores, key=scores.__getitem__)
-    return best_k, scores
+    sil_scores, inertias = _kmeans_eval(X, k_range)
+    best_k = max(sil_scores, key=sil_scores.__getitem__)
+    return best_k, sil_scores, inertias
 
 
-def _fkmeans_silhouette_scores(
+def _fkmeans_eval(
     X: np.ndarray, k_range: range = range(2, 11), m: float = 2.0
-) -> dict[int, float]:
-    """Compute silhouette scores for Fuzzy K-Means at each k in ``k_range``."""
+) -> tuple[dict[int, float], dict[int, float]]:
+    """Compute silhouette scores and objective values for FCM at each k.
+
+    Returns ``(silhouette_scores, objectives)`` mappings. The objective is the
+    final value of the fuzzy objective function (analogous to inertia).
+    """
     scores: dict[int, float] = {}
+    objectives: dict[int, float] = {}
     for k in k_range:
-        cntr, u, *_ = fuzz.cluster.cmeans(
+        cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(
             X.T, c=k, m=m, error=0.005, maxiter=1000, seed=42
         )
         labels = np.argmax(u, axis=0)
@@ -70,7 +81,8 @@ def _fkmeans_silhouette_scores(
                 X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
             )
         )
-    return scores
+        objectives[k] = float(jm[-1])
+    return scores, objectives
 
 
 def _find_best_k_hc(
@@ -159,11 +171,10 @@ def _classify_with_fkmeans(
         (labels, n_clusters, model_metrics, extras)
     """
     if n_clusters is None:
-        n_clusters, silhouette_scores = (
-            lambda scores: (max(scores, key=scores.__getitem__), scores)
-        )(_fkmeans_silhouette_scores(X, m=m))
+        silhouette_scores, objectives = _fkmeans_eval(X, m=m)
+        n_clusters = max(silhouette_scores, key=silhouette_scores.__getitem__)
     else:
-        silhouette_scores = _fkmeans_silhouette_scores(X, m=m)
+        silhouette_scores, objectives = _fkmeans_eval(X, m=m)
 
     cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(
         X.T, c=n_clusters, m=m, error=0.005, maxiter=1000, seed=42
@@ -184,6 +195,7 @@ def _classify_with_fkmeans(
         "membership": u,
         "centers": cntr,
         "silhouette_scores": silhouette_scores,
+        "inertias": objectives,
     }
 
     return labels, n_clusters, model_metrics, extras
@@ -234,7 +246,7 @@ def _classify_with_som(
     codebook = weights.reshape(-1, weights.shape[-1])
 
     if n_clusters is None:
-        n_clusters, silhouette_scores = _find_best_k(codebook)
+        n_clusters, silhouette_scores, inertias = _find_best_k(codebook)
     else:
         if n_clusters > codebook.shape[0]:
             raise ValueError(
@@ -242,7 +254,7 @@ def _classify_with_som(
                 f"({codebook.shape[0]})"
             )
         max_k = min(10, codebook.shape[0] - 1)
-        silhouette_scores = _silhouette_scores(codebook, range(2, max_k + 1))
+        silhouette_scores, inertias = _kmeans_eval(codebook, range(2, max_k + 1))
 
     km = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
     neuron_labels = km.fit_predict(codebook)
@@ -272,6 +284,7 @@ def _classify_with_som(
         "neuron_label_grid": neuron_label_grid,
         "grid_side": grid_side,
         "silhouette_scores": silhouette_scores,
+        "inertias": inertias,
     }
 
     return sample_labels, n_clusters, model_metrics, extras
@@ -337,9 +350,9 @@ def classify_edges(
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         if n_clusters is None:
-            n_clusters, silhouette_scores = _find_best_k(X_scaled)
+            n_clusters, silhouette_scores, inertias = _find_best_k(X_scaled)
         else:
-            silhouette_scores = _silhouette_scores(X_scaled)
+            silhouette_scores, inertias = _kmeans_eval(X_scaled)
         model = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
         labels = model.fit_predict(X_scaled)
         model_metrics = {
@@ -355,6 +368,7 @@ def classify_edges(
             "n_iter": int(model.n_iter_),
         }
         extras["silhouette_scores"] = silhouette_scores
+        extras["inertias"] = inertias
     else:
         raise ValueError(f"Unknown method: {method}")
 
