@@ -36,7 +36,7 @@ def export_txt(
         "kmeans_silhouette": "KMeans Silhouette (codebook)",
         "kmeans_inertia": "KMeans Inertia (codebook)",
     }
-    _INT_KEYS = {"n_iter", "grid_side", "n_neurons"}
+    _INT_KEYS = {"n_iter", "grid_side", "n_neurons", "n_leaves"}
 
     lines: list[str] = []
     lines.append("=" * 60)
@@ -50,7 +50,9 @@ def export_txt(
 
     for key, value in model_metrics.items():
         label = _LABELS.get(key, key)
-        if key in _INT_KEYS:
+        if isinstance(value, str):
+            lines.append(f"  {label:40s} {value}")
+        elif key in _INT_KEYS:
             lines.append(f"  {label:40s} {value}")
         else:
             lines.append(f"  {label:40s} {value:.6f}")

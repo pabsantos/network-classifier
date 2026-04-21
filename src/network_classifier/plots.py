@@ -9,7 +9,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.patches import RegularPolygon
+from scipy.cluster.hierarchy import dendrogram
 from scipy.stats import gaussian_kde
+from sklearn.cluster import AgglomerativeClustering
 import osmnx as ox
 
 from network_classifier.classify import METRICS
@@ -263,6 +265,84 @@ def plot_silhouette_vs_k(
     ax.set_title("Silhouette score vs k")
     ax.grid(True, alpha=0.3)
     ax.legend()
+    fig.tight_layout()
+    fig.savefig(filepath, dpi=150)
+    plt.close(fig)
+
+
+def _build_linkage_matrix(model: AgglomerativeClustering) -> np.ndarray:
+    """Build a scipy-style linkage matrix from a fitted sklearn model.
+
+    Requires the model to have been fitted with ``compute_distances=True``.
+    """
+    counts = np.zeros(model.children_.shape[0])
+    n_samples = model.n_leaves_
+    for i, merge in enumerate(model.children_):
+        count = 0
+        for child in merge:
+            if child < n_samples:
+                count += 1
+            else:
+                count += counts[child - n_samples]
+        counts[i] = count
+
+    return np.column_stack(
+        [model.children_, model.distances_, counts]
+    ).astype(float)
+
+
+def plot_dendrogram(
+    model: AgglomerativeClustering,
+    n_clusters: int,
+    filepath: Path,
+    truncate_p: int = 30,
+) -> None:
+    """Save a dendrogram plot from a fitted AgglomerativeClustering model.
+
+    Parameters
+    ----------
+    model : AgglomerativeClustering
+        Fitted model with ``compute_distances=True``.
+    n_clusters : int
+        Number of clusters selected (used to draw the cut line).
+    filepath : Path
+        Destination PNG path.
+    truncate_p : int
+        Show only the last *p* merges (``truncate_mode='lastp'``).
+    """
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+
+    Z = _build_linkage_matrix(model)
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    dendrogram(
+        Z,
+        truncate_mode="lastp",
+        p=truncate_p,
+        ax=ax,
+        leaf_rotation=90,
+        leaf_font_size=8,
+        color_threshold=0,
+        above_threshold_color="#4363d8",
+    )
+
+    # Draw horizontal line at the cut distance
+    if n_clusters >= 2:
+        cut_distance = (
+            Z[-(n_clusters - 1), 2] + Z[-n_clusters, 2]
+        ) / 2 if n_clusters <= len(Z) else Z[-1, 2]
+        ax.axhline(
+            y=cut_distance,
+            color="#e6194b",
+            linestyle="--",
+            linewidth=1.5,
+            label=f"Cut (k={n_clusters})",
+        )
+        ax.legend()
+
+    ax.set_xlabel("Cluster size")
+    ax.set_ylabel("Distance")
+    ax.set_title("Dendrogram")
     fig.tight_layout()
     fig.savefig(filepath, dpi=150)
     plt.close(fig)

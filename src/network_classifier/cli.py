@@ -17,6 +17,7 @@ from network_classifier.graph import (
 )
 from network_classifier.plots import (
     plot_crosstab_heatmap,
+    plot_dendrogram,
     plot_kde,
     plot_map,
     plot_silhouette_vs_k,
@@ -74,8 +75,10 @@ def main() -> None:
         "-m",
         "--method",
         default=None,
-        choices=["kmeans", "som", "fkmeans"],
-        help="Clustering method (default: no clustering)",
+        choices=["kmeans", "som", "fkmeans", "hc_sl", "hc_cl", "hc_ward", "hc_al"],
+        help="Clustering method (default: no clustering). "
+             "hc_sl=single linkage, hc_cl=complete linkage, "
+             "hc_ward=Ward, hc_al=average linkage",
     )
     parser.add_argument(
         "-k",
@@ -169,6 +172,12 @@ def main() -> None:
             )
             console.log(f"  Saved [bold]{umatrix_path}[/bold]")
 
+        if "hc_model" in extras:
+            dendro_path = plot_dir / "dendrogram.png"
+            console.log("Generating dendrogram...")
+            plot_dendrogram(extras["hc_model"], k, dendro_path)
+            console.log(f"  Saved [bold]{dendro_path}[/bold]")
+
         txt_path = plot_dir / "model_metrics.txt"
         export_txt(
             txt_path,
@@ -208,12 +217,17 @@ def _print_model_metrics(method: str, metrics: dict) -> None:
         "kmeans_silhouette": "KMeans Silhouette (codebook)",
         "kmeans_inertia": "KMeans Inertia (codebook)",
         "fpc": "Fuzzy Partition Coefficient",
+        "linkage": "Linkage Method",
+        "n_leaves": "Leaves",
     }
-    int_keys = {"n_iter", "grid_side", "n_neurons"}
+    int_keys = {"n_iter", "grid_side", "n_neurons", "n_leaves"}
+    str_keys = {"linkage"}
 
     for key, value in metrics.items():
         label = labels.get(key, key)
-        if key in int_keys:
+        if key in str_keys:
+            table.add_row(label, str(value))
+        elif key in int_keys:
             table.add_row(label, str(value))
         else:
             table.add_row(label, f"{value:.4f}")

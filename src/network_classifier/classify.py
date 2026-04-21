@@ -5,11 +5,18 @@ import pandas as pd
 import networkx as nx
 import skfuzzy as fuzz
 from minisom import MiniSom
-from sklearn.cluster import KMeans
+from sklearn.cluster import AgglomerativeClustering, KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 METRICS = ("betweenness", "clustering", "degree")
+
+HC_METHODS = {
+    "hc_sl": "single",
+    "hc_cl": "complete",
+    "hc_ward": "ward",
+    "hc_al": "average",
+}
 
 # Cap the number of samples used when computing silhouette scores.
 # silhouette_score is O(n^2) in memory/time via pairwise distances, so we
@@ -64,6 +71,72 @@ def _fkmeans_silhouette_scores(
             )
         )
     return scores
+
+
+def _find_best_k_hc(
+    X: np.ndarray, linkage_method: str, k_min: int = 2, k_max: int = 10
+) -> int:
+    """Select best k by largest gap in merge distances (dendrogram cut).
+
+    Fits once with ``compute_distances=True`` to obtain all merge distances,
+    then finds the largest jump among the last ``k_max - 1`` merges.
+    """
+    probe = AgglomerativeClustering(
+        n_clusters=2, linkage=linkage_method, compute_distances=True
+    )
+    probe.fit(X)
+    distances = probe.distances_
+
+    # Only inspect the tail: the last (k_max - 1) merges correspond to
+    # going from k_max clusters down to 1.
+    tail = distances[-(k_max - 1):]
+    gaps = np.diff(tail)
+    # gaps[i] = tail[i+1] - tail[i].  The largest gap at index i means
+    # cutting *before* merge tail[i+1], leaving (k_max - 1 - i) clusters
+    # when counted from the tail end.
+    best_idx = int(np.argmax(gaps))
+    best_k = (k_max - 1) - best_idx
+    return max(k_min, min(k_max, best_k))
+
+
+def _classify_with_hc(
+    X: np.ndarray, linkage_method: str, n_clusters: int | None
+) -> tuple[np.ndarray, int, dict[str, float], dict]:
+    """Hierarchical (agglomerative) clustering via sklearn.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Scaled feature matrix.
+    linkage_method : str
+        Linkage criterion: "single", "complete", "ward", or "average".
+    n_clusters : int or None
+        Number of clusters. If None, auto-selected by largest merge-distance
+        gap.
+    """
+    if n_clusters is None:
+        n_clusters = _find_best_k_hc(X, linkage_method)
+
+    model = AgglomerativeClustering(
+        n_clusters=n_clusters, linkage=linkage_method, compute_distances=True
+    )
+    labels = model.fit_predict(X)
+
+    model_metrics = {
+        "linkage": linkage_method,
+        "silhouette_score": float(
+            silhouette_score(
+                X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
+            )
+        ),
+        "n_leaves": int(model.n_leaves_),
+    }
+
+    extras: dict = {
+        "hc_model": model,
+    }
+
+    return labels, n_clusters, model_metrics, extras
 
 
 def _classify_with_fkmeans(
@@ -242,7 +315,13 @@ def classify_edges(
 
     extras: dict = {}
 
-    if method == "som":
+    if method in HC_METHODS:
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        labels, n_clusters, model_metrics, extras = _classify_with_hc(
+            X_scaled, HC_METHODS[method], n_clusters
+        )
+    elif method == "som":
         # SOMs work better with bounded inputs.
         X_som = MinMaxScaler().fit_transform(X)
         labels, n_clusters, model_metrics, extras = _classify_with_som(
