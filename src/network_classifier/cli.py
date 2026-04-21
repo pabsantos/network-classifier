@@ -2,6 +2,7 @@
 
 import argparse
 import re
+import sys
 from pathlib import Path
 
 from rich.console import Console
@@ -46,10 +47,9 @@ def main() -> None:
     )
     source.add_argument(
         "--bbox",
-        nargs=4,
-        type=float,
-        metavar=("NORTH", "SOUTH", "EAST", "WEST"),
-        help="Bounding box as four floats: north south east west",
+        type=str,
+        metavar="WEST,SOUTH,EAST,NORTH",
+        help="Bounding box as comma-separated floats: west,south,east,north",
     )
     source.add_argument(
         "--polygon",
@@ -85,17 +85,25 @@ def main() -> None:
         help="Number of clusters (default: auto-select best k)",
     )
 
-    args = parser.parse_args()
+    argv = sys.argv[1:]
+    for i, arg in enumerate(argv):
+        if arg == "--bbox" and i + 1 < len(argv):
+            argv = argv[:i] + [f"--bbox={argv[i + 1]}"] + argv[i + 2:]
+            break
+    args = parser.parse_args(argv)
 
     if args.bbox is not None:
-        north, south, east, west = args.bbox
-        label = f"bbox_{north}_{south}_{east}_{west}"
+        parts = args.bbox.split(",")
+        if len(parts) != 4:
+            parser.error("--bbox requires exactly 4 comma-separated values: west,south,east,north")
+        west, south, east, north = (float(v) for v in parts)
+        label = f"bbox_{west}_{south}_{east}_{north}"
         output = args.output or _default_output(label, args.format)
         output_path = Path(output)
         console.log(
-            f"Loading graph for bbox [bold]{north}, {south}, {east}, {west}[/bold]..."
+            f"Loading graph for bbox [bold]{west},{south},{east},{north}[/bold]..."
         )
-        G = load_graph_from_bbox(north, south, east, west, "drive")
+        G = load_graph_from_bbox(west, south, east, north, "drive")
     elif args.polygon is not None:
         label = Path(args.polygon).stem
         output = args.output or _default_output(label, args.format)

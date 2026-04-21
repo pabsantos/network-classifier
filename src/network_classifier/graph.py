@@ -30,14 +30,14 @@ def load_graph(place: str, network_type: str = "drive") -> nx.MultiDiGraph:
 
 
 def load_graph_from_bbox(
-    north: float,
+    west: float,
     south: float,
     east: float,
-    west: float,
+    north: float,
     network_type: str = "drive",
 ) -> nx.MultiDiGraph:
     G = ox.graph_from_bbox(
-        (north, south, east, west), network_type=network_type
+        (west, south, east, north), network_type=network_type
     )
     return _consolidate(G)
 
