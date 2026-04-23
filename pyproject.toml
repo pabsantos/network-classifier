@@ -6,15 +6,18 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "contextily>=1.6.0",
-    "jupyter>=1.1.1",
     "matplotlib>=3.8.0",
     "minisom>=2.3.3",
     "networkit>=11.2.1",
+    "networkx>=3.0.0",
+    "numpy>=2.0.0",
     "osmnx>=2.1.0",
     "pandas>=2.0.0",
     "rich>=14.0.0",
     "scikit-fuzzy>=0.4.2",
     "scikit-learn>=1.4.0",
+    "scipy>=1.10.0",
+    "shapely>=2.0.0",
 ]
 
 [project.optional-dependencies]

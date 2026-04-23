@@ -4,7 +4,7 @@ CLI tool that downloads a city's road network, computes centrality metrics, and 
 
 ## Installation
 
-Requires Python >= 3.12.
+Requires Python >= 3.12 and [CMake](https://cmake.org/download/).
 
 ### From GitHub (via pip)
 
