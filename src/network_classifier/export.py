@@ -35,6 +35,8 @@ def export_txt(
         "n_neurons": "Neurons",
         "kmeans_silhouette": "KMeans Silhouette (codebook)",
         "kmeans_inertia": "KMeans Inertia (codebook)",
+        "kmeans_calinski_harabasz_score": "KMeans Calinski-Harabasz (codebook)",
+        "calinski_harabasz_score": "Calinski-Harabasz Score",
     }
     _INT_KEYS = {"n_iter", "grid_side", "n_neurons", "n_leaves"}
 

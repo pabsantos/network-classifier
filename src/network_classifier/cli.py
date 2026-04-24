@@ -223,6 +223,8 @@ def _print_model_metrics(method: str, metrics: dict) -> None:
         "n_neurons": "Neurons",
         "kmeans_silhouette": "KMeans Silhouette (codebook)",
         "kmeans_inertia": "KMeans Inertia (codebook)",
+        "kmeans_calinski_harabasz_score": "KMeans Calinski-Harabasz (codebook)",
+        "calinski_harabasz_score": "Calinski-Harabasz Score",
         "fpc": "Fuzzy Partition Coefficient",
         "linkage": "Linkage Method",
         "n_leaves": "Leaves",

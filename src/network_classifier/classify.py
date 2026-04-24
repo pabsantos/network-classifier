@@ -6,7 +6,7 @@ import networkx as nx
 import skfuzzy as fuzz
 from minisom import MiniSom
 from sklearn.cluster import AgglomerativeClustering, KMeans
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import calinski_harabasz_score, silhouette_score
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 METRICS = ("betweenness", "clustering", "degree")
@@ -141,6 +141,7 @@ def _classify_with_hc(
                 X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
             )
         ),
+        "calinski_harabasz_score": float(calinski_harabasz_score(X, labels)),
         "n_leaves": int(model.n_leaves_),
     }
 
@@ -188,6 +189,7 @@ def _classify_with_fkmeans(
                 X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
             )
         ),
+        "calinski_harabasz_score": float(calinski_harabasz_score(X, labels)),
         "n_iter": int(p),
     }
 
@@ -267,8 +269,15 @@ def _classify_with_som(
 
     if len(set(neuron_labels)) > 1:
         codebook_silhouette = float(silhouette_score(codebook, neuron_labels))
+        codebook_ch = float(calinski_harabasz_score(codebook, neuron_labels))
     else:
         codebook_silhouette = 0.0
+        codebook_ch = 0.0
+
+    if len(set(sample_labels)) > 1:
+        sample_ch = float(calinski_harabasz_score(X, sample_labels))
+    else:
+        sample_ch = 0.0
 
     model_metrics = {
         "quantization_error": float(som.quantization_error(X)),
@@ -277,6 +286,8 @@ def _classify_with_som(
         "n_neurons": int(grid_side * grid_side),
         "kmeans_silhouette": codebook_silhouette,
         "kmeans_inertia": float(km.inertia_),
+        "kmeans_calinski_harabasz_score": codebook_ch,
+        "calinski_harabasz_score": sample_ch,
     }
 
     extras = {
@@ -364,6 +375,9 @@ def classify_edges(
                     sample_size=SILHOUETTE_SAMPLE_SIZE,
                     random_state=42,
                 )
+            ),
+            "calinski_harabasz_score": float(
+                calinski_harabasz_score(X_scaled, labels)
             ),
             "n_iter": int(model.n_iter_),
         }
