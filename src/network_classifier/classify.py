@@ -7,6 +7,7 @@ import skfuzzy as fuzz
 from minisom import MiniSom
 from sklearn.cluster import AgglomerativeClustering, KMeans
 from sklearn.metrics import calinski_harabasz_score, silhouette_score
+from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 METRICS = ("betweenness", "clustering", "degree")
@@ -203,6 +204,75 @@ def _classify_with_fkmeans(
     return labels, n_clusters, model_metrics, extras
 
 
+def _gmm_eval(
+    X: np.ndarray, k_range: range = range(2, 11)
+) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
+    """Compute silhouette, BIC, and AIC for GMM at each k.
+
+    Returns ``(silhouette_scores, bics, aics)`` mappings.
+    """
+    sil_scores: dict[int, float] = {}
+    bics: dict[int, float] = {}
+    aics: dict[int, float] = {}
+    for k in k_range:
+        gmm = GaussianMixture(
+            n_components=k, covariance_type="full", random_state=42
+        )
+        labels = gmm.fit_predict(X)
+        bics[k] = float(gmm.bic(X))
+        aics[k] = float(gmm.aic(X))
+        if len(set(labels)) < 2:
+            continue
+        sil_scores[k] = float(
+            silhouette_score(
+                X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
+            )
+        )
+    return sil_scores, bics, aics
+
+
+def _classify_with_gmm(
+    X: np.ndarray, n_clusters: int | None
+) -> tuple[np.ndarray, int, dict[str, float], dict]:
+    """Gaussian Mixture Model clustering via sklearn.
+
+    When ``n_clusters`` is None, k is selected by lowest BIC (standard
+    model-selection criterion for GMM).
+    """
+    sil_scores, bics, aics = _gmm_eval(X)
+
+    if n_clusters is None:
+        n_clusters = min(bics, key=bics.__getitem__)
+
+    model = GaussianMixture(
+        n_components=n_clusters, covariance_type="full", random_state=42
+    )
+    labels = model.fit_predict(X)
+
+    model_metrics = {
+        "bic": float(model.bic(X)),
+        "aic": float(model.aic(X)),
+        "log_likelihood": float(model.score(X) * X.shape[0]),
+        "silhouette_score": float(
+            silhouette_score(
+                X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
+            )
+        ),
+        "calinski_harabasz_score": float(calinski_harabasz_score(X, labels)),
+        "n_iter": int(model.n_iter_),
+        "converged": bool(model.converged_),
+    }
+
+    extras: dict = {
+        "gmm_model": model,
+        "silhouette_scores": sil_scores,
+        "bics": bics,
+        "aics": aics,
+    }
+
+    return labels, n_clusters, model_metrics, extras
+
+
 def _train_som(
     X: np.ndarray, random_seed: int = 42
 ) -> tuple[MiniSom, int]:
@@ -312,7 +382,8 @@ def classify_edges(
         Graph with "betweenness", "clustering", and "degree" edge
         attributes.
     method : str
-        Clustering method: "kmeans" or "som".
+        Clustering method: "kmeans", "som", "fkmeans", "gmm", or one of the
+        hierarchical variants (hc_sl, hc_cl, hc_ward, hc_al).
     n_clusters : int or None
         Number of clusters. If None, the best k is selected automatically.
 
@@ -350,6 +421,12 @@ def classify_edges(
         X_som = MinMaxScaler().fit_transform(X)
         labels, n_clusters, model_metrics, extras = _classify_with_som(
             X_som, n_clusters
+        )
+    elif method == "gmm":
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        labels, n_clusters, model_metrics, extras = _classify_with_gmm(
+            X_scaled, n_clusters
         )
     elif method == "fkmeans":
         scaler = StandardScaler()

@@ -37,6 +37,10 @@ def export_txt(
         "kmeans_inertia": "KMeans Inertia (codebook)",
         "kmeans_calinski_harabasz_score": "KMeans Calinski-Harabasz (codebook)",
         "calinski_harabasz_score": "Calinski-Harabasz Score",
+        "bic": "BIC",
+        "aic": "AIC",
+        "log_likelihood": "Log-Likelihood",
+        "converged": "Converged",
     }
     _INT_KEYS = {"n_iter", "grid_side", "n_neurons", "n_leaves"}
 
@@ -52,7 +56,7 @@ def export_txt(
 
     for key, value in model_metrics.items():
         label = _LABELS.get(key, key)
-        if isinstance(value, str):
+        if isinstance(value, (str, bool)):
             lines.append(f"  {label:40s} {value}")
         elif key in _INT_KEYS:
             lines.append(f"  {label:40s} {value}")

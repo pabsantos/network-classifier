@@ -63,6 +63,9 @@ network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m fkmeans -k 5
 # SOM (Self-Organizing Map) + K-Means
 network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m som -k 5
 
+# Gaussian Mixture Model
+network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m gmm -k 5
+
 # Hierarchical - Single Linkage
 network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_sl
 
@@ -78,6 +81,7 @@ network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_al
 
 When `-k` is omitted, the best k is selected automatically:
 - **K-Means, Fuzzy K-Means, and SOM**: highest silhouette score (k=2..10)
+- **GMM**: lowest BIC (k=2..10)
 - **Hierarchical**: largest gap in merge distances from the dendrogram (k=2..10)
 
 ### Arguments
@@ -97,6 +101,7 @@ When `-k` is omitted, the best k is selected automatically:
 | K-Means | `kmeans` | Classic partitional clustering |
 | Fuzzy K-Means | `fkmeans` | Fuzzy clustering via FCM |
 | SOM | `som` | Self-Organizing Map + K-Means on codebook |
+| GMM | `gmm` | Gaussian Mixture Model (model-selected by BIC) |
 | Single Linkage | `hc_sl` | Hierarchical - nearest neighbor |
 | Complete Linkage | `hc_cl` | Hierarchical - farthest neighbor |
 | Ward | `hc_ward` | Hierarchical - minimizes within-cluster variance |

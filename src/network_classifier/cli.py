@@ -76,10 +76,10 @@ def main() -> None:
         "-m",
         "--method",
         default=None,
-        choices=["kmeans", "som", "fkmeans", "hc_sl", "hc_cl", "hc_ward", "hc_al"],
+        choices=["kmeans", "som", "fkmeans", "gmm", "hc_sl", "hc_cl", "hc_ward", "hc_al"],
         help="Clustering method (default: no clustering). "
              "hc_sl=single linkage, hc_cl=complete linkage, "
-             "hc_ward=Ward, hc_al=average linkage",
+             "hc_ward=Ward, hc_al=average linkage, gmm=Gaussian Mixture Model",
     )
     parser.add_argument(
         "-k",
@@ -226,15 +226,20 @@ def _print_model_metrics(method: str, metrics: dict) -> None:
         "kmeans_calinski_harabasz_score": "KMeans Calinski-Harabasz (codebook)",
         "calinski_harabasz_score": "Calinski-Harabasz Score",
         "fpc": "Fuzzy Partition Coefficient",
+        "bic": "BIC",
+        "aic": "AIC",
+        "log_likelihood": "Log-Likelihood",
+        "converged": "Converged",
         "linkage": "Linkage Method",
         "n_leaves": "Leaves",
     }
     int_keys = {"n_iter", "grid_side", "n_neurons", "n_leaves"}
     str_keys = {"linkage"}
+    bool_keys = {"converged"}
 
     for key, value in metrics.items():
         label = labels.get(key, key)
-        if key in str_keys:
+        if key in str_keys or key in bool_keys:
             table.add_row(label, str(value))
         elif key in int_keys:
             table.add_row(label, str(value))
