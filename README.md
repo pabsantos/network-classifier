@@ -76,15 +76,11 @@ network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_ward -k 5
 network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_al -k 5
 ```
 
-`-k` is required whenever `-m` is set. Per-k diagnostic curves
-(silhouette, inertia/BIC) for k=2..10 are still computed and saved as
-plots so you can validate your choice.
+`-k` is required whenever `-m` is set. Per-k diagnostic curves (silhouette, inertia/BIC) for k=2..10 are still computed and saved as plots so you can validate your choice.
 
 ### PCA pre-processing (optional)
 
-Pass `--pca` together with `-m` to project the scaled centrality features
-onto their first two principal components before clustering. The chosen
-model then fits on PC1/PC2:
+Pass `--pca` together with `-m` to project the scaled centrality features onto their first two principal components before clustering. The chosen model then fits on PC1/PC2:
 
 ```bash
 network-classifier "Curitiba, Brazil" -f gpkg -m kmeans -k 5 --pca
@@ -93,9 +89,8 @@ network-classifier "Curitiba, Brazil" -f gpkg -m kmeans -k 5 --pca
 When `--pca` is set, two extra outputs are produced:
 
 - `output/pca.png` — scatter of PC1 vs PC2 coloured by cluster.
-- A `PCA Parameters` section in `output/model_metrics.txt` with the
-  per-component explained variance, cumulative variance, singular values,
-  feature loadings and pre-PCA feature means.
+
+- A `PCA Parameters` section in `output/model_metrics.txt` with the per-component explained variance, cumulative variance, singular values, feature loadings and pre-PCA feature means.
 
 ### Arguments
 

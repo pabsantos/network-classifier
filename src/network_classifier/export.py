@@ -71,7 +71,6 @@ def export_txt(
         sv = pca_info["singular_values"]
         components = pca_info["components"]
         feature_names = pca_info["feature_names"]
-        mean = pca_info["mean"]
 
         lines.append("")
         lines.append("-" * 60)
@@ -99,10 +98,6 @@ def export_txt(
         for i, row in enumerate(components, start=1):
             cells = "".join(f"{v:>14.6f}" for v in row)
             lines.append(f"    PC{i}{cells}")
-        lines.append("")
-        lines.append("  Feature means (pre-PCA, post-scaling):")
-        for name, m in zip(feature_names, mean):
-            lines.append(f"    {name:<14s} {m:.6f}")
 
     lines.append("")
     Path(filepath).write_text("\n".join(lines), encoding="utf-8")
