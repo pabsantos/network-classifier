@@ -9,25 +9,23 @@ from sklearn.cluster import AgglomerativeClustering
 from network_classifier.plots import (
     _build_linkage_matrix,
     plot_dendrogram,
-    plot_elbow,
-    plot_silhouette_vs_k,
+    plot_performance,
 )
 
 
-class TestPlotSilhouetteVsK:
+class TestPlotPerformance:
     def test_creates_file(self, tmp_path):
-        scores = {2: 0.5, 3: 0.6, 4: 0.55, 5: 0.4}
-        filepath = tmp_path / "sil.png"
-        plot_silhouette_vs_k(scores, selected_k=3, filepath=filepath)
-        assert filepath.exists()
-        assert filepath.stat().st_size > 0
-
-
-class TestPlotElbow:
-    def test_creates_file(self, tmp_path):
-        inertias = {2: 100.0, 3: 60.0, 4: 40.0, 5: 35.0}
-        filepath = tmp_path / "elbow.png"
-        plot_elbow(inertias, selected_k=3, filepath=filepath)
+        performance = {
+            k: {
+                "silhouette": 0.5 - 0.05 * k,
+                "chi": 100.0 + 10 * k,
+                "v_measure": 0.3 + 0.02 * k,
+                "wcss": 200.0 / k,
+            }
+            for k in range(2, 6)
+        }
+        filepath = tmp_path / "performance.png"
+        plot_performance(performance, selected_k=3, filepath=filepath)
         assert filepath.exists()
         assert filepath.stat().st_size > 0
 

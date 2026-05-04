@@ -20,32 +20,31 @@ from network_classifier.classify import (
 # ---------------------------------------------------------------------------
 
 class TestKmeansEval:
-    def test_returns_scores_and_inertias(self):
+    def test_returns_per_k_metrics(self):
         rng = np.random.RandomState(0)
         X = rng.randn(200, 3)
-        sil, inertias = _kmeans_eval(X, k_range=range(2, 6))
-        assert set(sil.keys()) == {2, 3, 4, 5}
-        assert set(inertias.keys()) == {2, 3, 4, 5}
-        # inertia must decrease as k grows
-        assert inertias[2] >= inertias[5]
-
-    def test_silhouette_in_range(self):
-        rng = np.random.RandomState(0)
-        X = rng.randn(100, 3)
-        sil, _ = _kmeans_eval(X, k_range=range(2, 5))
-        for v in sil.values():
-            assert -1 <= v <= 1
+        y_true = ["a"] * 100 + ["b"] * 100
+        out = _kmeans_eval(X, y_true, k_range=range(2, 6))
+        assert set(out.keys()) == {2, 3, 4, 5}
+        for k, m in out.items():
+            assert set(m.keys()) == {"silhouette", "chi", "v_measure", "wcss"}
+            assert -1 <= m["silhouette"] <= 1
+            assert 0.0 <= m["v_measure"] <= 1.0
+        # WCSS must decrease as k grows
+        assert out[2]["wcss"] >= out[5]["wcss"]
 
 
 class TestFkmeansEval:
-    def test_returns_scores_and_objectives(self):
+    def test_returns_per_k_metrics(self):
         rng = np.random.RandomState(0)
         X = rng.randn(100, 3)
-        sil, obj = _fkmeans_eval(X, k_range=range(2, 5), m=2.0)
-        assert len(sil) > 0
-        assert len(obj) > 0
-        for v in sil.values():
-            assert -1 <= v <= 1
+        y_true = ["a"] * 50 + ["b"] * 50
+        out = _fkmeans_eval(X, y_true, k_range=range(2, 5), m=2.0)
+        assert len(out) > 0
+        for k, m in out.items():
+            assert set(m.keys()) == {"silhouette", "chi", "v_measure", "wcss"}
+            assert -1 <= m["silhouette"] <= 1
+            assert 0.0 <= m["v_measure"] <= 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -59,8 +58,11 @@ class TestClassifyEdges:
         labels = {data["cluster"] for *_, data in G.edges(data=True)}
         assert labels == {0, 1, 2}
         assert "silhouette_score" in metrics
-        assert "silhouette_scores" in extras
-        assert "inertias" in extras
+        assert "performance_per_k" in extras
+        first_k = next(iter(extras["performance_per_k"]))
+        assert set(extras["performance_per_k"][first_k].keys()) == {
+            "silhouette", "chi", "v_measure", "wcss"
+        }
 
     @pytest.mark.parametrize("method", list(HC_METHODS.keys()))
     def test_hc_fixed_k(self, sample_graph, method):
@@ -71,7 +73,7 @@ class TestClassifyEdges:
     def test_som_fixed_k(self, sample_graph):
         G, metrics, extras = classify_edges(sample_graph, "som", n_clusters=3)
         assert "som" in extras
-        assert "inertias" in extras
+        assert "performance_per_k" in extras
 
     def test_unknown_method_raises(self, sample_graph):
         with pytest.raises(ValueError, match="Unknown method"):

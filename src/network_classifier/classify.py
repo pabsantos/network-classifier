@@ -29,37 +29,64 @@ HC_METHODS = {
 SILHOUETTE_SAMPLE_SIZE = 5000
 
 
-def _kmeans_eval(
-    X: np.ndarray, k_range: range = range(2, 11)
-) -> tuple[dict[int, float], dict[int, float]]:
-    """Compute silhouette scores and inertias for KMeans at each k.
+def _normalize_highway(hw) -> str:
+    """Fold a raw OSM highway tag into its canonical class.
 
-    Returns ``(silhouette_scores, inertias)`` mappings.
+    Multi-typed edges (list values) collapse to their first entry; the
+    ``_link`` suffix is stripped so e.g. ``primary_link`` joins ``primary``.
     """
-    sil_scores: dict[int, float] = {}
-    inertias: dict[int, float] = {}
-    for k in k_range:
-        km = KMeans(n_clusters=k, random_state=42, n_init="auto")
-        labels = km.fit_predict(X)
-        sil_scores[k] = float(
+    if isinstance(hw, list):
+        hw = hw[0]
+    if hw.endswith("_link"):
+        hw = hw.removesuffix("_link")
+    return hw
+
+
+def _per_k_metrics(
+    X: np.ndarray,
+    labels: np.ndarray,
+    y_true: list[str],
+    wcss: float,
+) -> dict[str, float]:
+    """Bundle silhouette, CHI, V-measure and WCSS for one k."""
+    return {
+        "silhouette": float(
             silhouette_score(
                 X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
             )
-        )
-        inertias[k] = float(km.inertia_)
-    return sil_scores, inertias
+        ),
+        "chi": float(calinski_harabasz_score(X, labels)),
+        "v_measure": float(v_measure_score(y_true, labels)),
+        "wcss": float(wcss),
+    }
+
+
+def _kmeans_eval(
+    X: np.ndarray,
+    y_true: list[str],
+    k_range: range = range(2, 11),
+) -> dict[int, dict[str, float]]:
+    """Compute silhouette, CHI, V-measure and WCSS for KMeans at each k."""
+    out: dict[int, dict[str, float]] = {}
+    for k in k_range:
+        km = KMeans(n_clusters=k, random_state=42, n_init="auto")
+        labels = km.fit_predict(X)
+        out[k] = _per_k_metrics(X, labels, y_true, wcss=float(km.inertia_))
+    return out
 
 
 def _fkmeans_eval(
-    X: np.ndarray, k_range: range = range(2, 11), m: float = 2.0
-) -> tuple[dict[int, float], dict[int, float]]:
-    """Compute silhouette scores and objective values for FCM at each k.
+    X: np.ndarray,
+    y_true: list[str],
+    k_range: range = range(2, 11),
+    m: float = 2.0,
+) -> dict[int, dict[str, float]]:
+    """Compute silhouette, CHI, V-measure and fuzzy objective for FCM at each k.
 
-    Returns ``(silhouette_scores, objectives)`` mappings. The objective is the
-    final value of the fuzzy objective function (analogous to inertia).
+    The fuzzy objective ``jm[-1]`` is reported in the WCSS slot since it
+    plays the same role for fuzzy clustering.
     """
-    scores: dict[int, float] = {}
-    objectives: dict[int, float] = {}
+    out: dict[int, dict[str, float]] = {}
     for k in k_range:
         cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(
             X.T, c=k, m=m, error=0.005, maxiter=1000, seed=42
@@ -67,13 +94,8 @@ def _fkmeans_eval(
         labels = np.argmax(u, axis=0)
         if len(set(labels)) < 2:
             continue
-        scores[k] = float(
-            silhouette_score(
-                X, labels, sample_size=SILHOUETTE_SAMPLE_SIZE, random_state=42
-            )
-        )
-        objectives[k] = float(jm[-1])
-    return scores, objectives
+        out[k] = _per_k_metrics(X, labels, y_true, wcss=float(jm[-1]))
+    return out
 
 
 def _classify_with_hc(
@@ -114,7 +136,10 @@ def _classify_with_hc(
 
 
 def _classify_with_fkmeans(
-    X: np.ndarray, n_clusters: int, m: float = 2.0
+    X: np.ndarray,
+    n_clusters: int,
+    y_true: list[str],
+    m: float = 2.0,
 ) -> tuple[np.ndarray, dict[str, float], dict]:
     """Fuzzy K-Means clustering via skfuzzy cmeans.
 
@@ -124,6 +149,8 @@ def _classify_with_fkmeans(
         Scaled feature matrix.
     n_clusters : int
         Number of clusters.
+    y_true : list[str]
+        Ground-truth labels (highway classes) used for per-k V-measure.
     m : float
         Fuzziness exponent (default 2.0).
 
@@ -132,7 +159,7 @@ def _classify_with_fkmeans(
     tuple
         (labels, model_metrics, extras)
     """
-    silhouette_scores, objectives = _fkmeans_eval(X, m=m)
+    performance_per_k = _fkmeans_eval(X, y_true, m=m)
 
     cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(
         X.T, c=n_clusters, m=m, error=0.005, maxiter=1000, seed=42
@@ -153,8 +180,7 @@ def _classify_with_fkmeans(
     extras: dict = {
         "membership": u,
         "centers": cntr,
-        "silhouette_scores": silhouette_scores,
-        "inertias": objectives,
+        "performance_per_k": performance_per_k,
     }
 
     return labels, model_metrics, extras
@@ -256,12 +282,12 @@ def _train_som(
 
 
 def _classify_with_som(
-    X: np.ndarray, n_clusters: int
+    X: np.ndarray, n_clusters: int, y_true: list[str]
 ) -> tuple[np.ndarray, dict[str, float], dict]:
     """Two-stage SOM clustering: train SOM, then KMeans on the codebook.
 
     Each sample is assigned the cluster of its Best Matching Unit (BMU).
-    Per-k silhouette scores and inertias on the SOM codebook (k=2..10) are
+    Per-k silhouette / CHI / V-measure / WCSS at sample level (k=2..10) are
     returned in ``extras`` to support diagnostic plots.
     """
     som, grid_side = _train_som(X)
@@ -275,17 +301,29 @@ def _classify_with_som(
             f"n_clusters ({n_clusters}) exceeds number of SOM neurons "
             f"({codebook.shape[0]})"
         )
+
+    # Cache BMU coordinates for each sample once — the SOM itself is fixed
+    # across the per-k sweep, so this avoids repeating O(N·neurons) lookups
+    # for every k.
+    bmu_coords = np.array([som.winner(x) for x in X])
+
     max_k = min(10, codebook.shape[0] - 1)
-    silhouette_scores, inertias = _kmeans_eval(codebook, range(2, max_k + 1))
+    performance_per_k: dict[int, dict[str, float]] = {}
+    for k in range(2, max_k + 1):
+        km_k = KMeans(n_clusters=k, random_state=42, n_init="auto")
+        neuron_lbls = km_k.fit_predict(codebook)
+        neuron_grid = neuron_lbls.reshape(grid_side, grid_side)
+        sample_lbls = neuron_grid[bmu_coords[:, 0], bmu_coords[:, 1]]
+        if len(set(sample_lbls)) < 2:
+            continue
+        performance_per_k[k] = _per_k_metrics(
+            X, sample_lbls, y_true, wcss=float(km_k.inertia_)
+        )
 
     km = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
     neuron_labels = km.fit_predict(codebook)
     neuron_label_grid = neuron_labels.reshape(grid_side, grid_side)
-
-    sample_labels = np.empty(len(X), dtype=int)
-    for i, x in enumerate(X):
-        bmu_x, bmu_y = som.winner(x)
-        sample_labels[i] = neuron_label_grid[bmu_x, bmu_y]
+    sample_labels = neuron_label_grid[bmu_coords[:, 0], bmu_coords[:, 1]]
 
     if len(set(neuron_labels)) > 1:
         codebook_silhouette = float(silhouette_score(codebook, neuron_labels))
@@ -314,8 +352,7 @@ def _classify_with_som(
         "som": som,
         "neuron_label_grid": neuron_label_grid,
         "grid_side": grid_side,
-        "silhouette_scores": silhouette_scores,
-        "inertias": inertias,
+        "performance_per_k": performance_per_k,
     }
 
     return sample_labels, model_metrics, extras
@@ -347,10 +384,12 @@ def classify_edges(
     """
     edge_order: list[tuple[int, int, int]] = []
     features: list[list[float]] = []
+    y_true: list[str] = []
 
     for u, v, key, data in G.edges(keys=True, data=True):
         edge_order.append((u, v, key))
         features.append([data[m] for m in METRICS])
+        y_true.append(_normalize_highway(data.get("highway", "unknown")))
 
     X = np.array(features)
     # Betweenness is heavily right-skewed; log1p compresses the tail
@@ -369,7 +408,9 @@ def classify_edges(
     elif method == "som":
         # SOMs work better with bounded inputs.
         X_som = MinMaxScaler().fit_transform(X)
-        labels, model_metrics, extras = _classify_with_som(X_som, n_clusters)
+        labels, model_metrics, extras = _classify_with_som(
+            X_som, n_clusters, y_true
+        )
     elif method == "gmm":
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
@@ -378,12 +419,12 @@ def classify_edges(
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         labels, model_metrics, extras = _classify_with_fkmeans(
-            X_scaled, n_clusters
+            X_scaled, n_clusters, y_true
         )
     elif method == "kmeans":
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
-        silhouette_scores, inertias = _kmeans_eval(X_scaled)
+        performance_per_k = _kmeans_eval(X_scaled, y_true)
         model = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
         labels = model.fit_predict(X_scaled)
         model_metrics = {
@@ -401,8 +442,7 @@ def classify_edges(
             ),
             "n_iter": int(model.n_iter_),
         }
-        extras["silhouette_scores"] = silhouette_scores
-        extras["inertias"] = inertias
+        extras["performance_per_k"] = performance_per_k
     else:
         raise ValueError(f"Unknown method: {method}")
 
@@ -458,12 +498,7 @@ def highway_cluster_v_measure(G: nx.MultiDiGraph) -> float:
     clusters: list[int] = []
 
     for _u, _v, _key, data in G.edges(keys=True, data=True):
-        hw = data.get("highway", "unknown")
-        if isinstance(hw, list):
-            hw = hw[0]
-        if hw.endswith("_link"):
-            hw = hw.removesuffix("_link")
-        highways.append(hw)
+        highways.append(_normalize_highway(data.get("highway", "unknown")))
         clusters.append(int(data["cluster"]))
 
     return float(v_measure_score(highways, clusters))

@@ -136,8 +136,7 @@ Plots are saved to the `output/` directory:
 |---|---|---|
 | `*_kde.png` | All | KDE distribution per metric and cluster |
 | `map.png` | All | Map of road segments colored by cluster |
-| `silhouette_vs_k.png` | kmeans, fkmeans, som | Silhouette score vs k |
-| `elbow.png` | kmeans, fkmeans, som | Elbow method (inertia vs k) |
+| `performance.png` | kmeans, fkmeans, som | Stacked subplots of silhouette / CHI / V-measure / WCSS vs k |
 | `dendrogram.png` | hc_* | Dendrogram with cut line |
 | `umatrix.png` | som | U-Matrix and neuron cluster assignments |
 

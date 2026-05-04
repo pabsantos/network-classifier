@@ -17,10 +17,9 @@ from network_classifier.graph import (
 )
 from network_classifier.plots import (
     plot_dendrogram,
-    plot_elbow,
     plot_kde,
     plot_map,
-    plot_silhouette_vs_k,
+    plot_performance,
     plot_umatrix,
 )
 
@@ -155,19 +154,13 @@ def main() -> None:
         plot_map(G, map_path)
         console.log(f"  Saved [bold]{map_path}[/bold]")
 
-        if "silhouette_scores" in extras:
-            silhouette_path = plot_dir / "silhouette_vs_k.png"
-            console.log("Generating silhouette score vs k plot...")
-            plot_silhouette_vs_k(
-                extras["silhouette_scores"], k, silhouette_path
+        if "performance_per_k" in extras:
+            performance_path = plot_dir / "performance.png"
+            console.log("Generating performance plot (silhouette/CHI/V-measure/WCSS vs k)...")
+            plot_performance(
+                extras["performance_per_k"], k, performance_path
             )
-            console.log(f"  Saved [bold]{silhouette_path}[/bold]")
-
-        if "inertias" in extras:
-            elbow_path = plot_dir / "elbow.png"
-            console.log("Generating elbow plot...")
-            plot_elbow(extras["inertias"], k, elbow_path)
-            console.log(f"  Saved [bold]{elbow_path}[/bold]")
+            console.log(f"  Saved [bold]{performance_path}[/bold]")
 
         if args.method == "som":
             umatrix_path = plot_dir / "umatrix.png"
