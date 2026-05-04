@@ -5,10 +5,11 @@ import re
 import sys
 from pathlib import Path
 
+import numpy as np
 from rich.console import Console
 from rich.table import Table
 from network_classifier.centrality import compute_centrality
-from network_classifier.classify import classify_edges, highway_cluster_crosstab
+from network_classifier.classify import classify_edges, highway_cluster_v_measure
 from network_classifier.export import export_geopackage, export_graphml, export_txt
 from network_classifier.graph import (
     load_graph,
@@ -16,13 +17,12 @@ from network_classifier.graph import (
     load_graph_from_polygon,
 )
 from network_classifier.plots import (
-    plot_crosstab_heatmap,
     plot_dendrogram,
-    plot_elbow,
-    plot_kde,
     plot_map,
-    plot_silhouette_vs_k,
+    plot_pca_scatter,
+    plot_performance,
     plot_umatrix,
+    plot_violin,
 )
 
 console = Console()
@@ -31,7 +31,7 @@ console = Console()
 def _default_output(label: str, fmt: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
     ext = "graphml" if fmt == "graphml" else "gpkg"
-    return f"{slug}.{ext}"
+    return f"output/{slug}.{ext}"
 
 
 def main() -> None:
@@ -76,17 +76,22 @@ def main() -> None:
         "-m",
         "--method",
         default=None,
-        choices=["kmeans", "som", "fkmeans", "hc_sl", "hc_cl", "hc_ward", "hc_al"],
+        choices=["kmeans", "som", "fkmeans", "gmm", "hc_sl", "hc_cl", "hc_ward", "hc_al"],
         help="Clustering method (default: no clustering). "
              "hc_sl=single linkage, hc_cl=complete linkage, "
-             "hc_ward=Ward, hc_al=average linkage",
+             "hc_ward=Ward, hc_al=average linkage, gmm=Gaussian Mixture Model",
     )
     parser.add_argument(
         "-k",
         "--n-clusters",
         type=int,
         default=None,
-        help="Number of clusters (default: auto-select best k)",
+        help="Number of clusters (required when -m/--method is set)",
+    )
+    parser.add_argument(
+        "--pca",
+        action="store_true",
+        help="Project features onto PC1/PC2 before clustering",
     )
 
     argv = sys.argv[1:]
@@ -95,6 +100,11 @@ def main() -> None:
             argv = argv[:i] + [f"--bbox={argv[i + 1]}"] + argv[i + 2:]
             break
     args = parser.parse_args(argv)
+
+    if args.method is not None and args.n_clusters is None:
+        parser.error("-k/--n-clusters is required when -m/--method is set")
+    if args.pca and args.method is None:
+        parser.error("--pca requires -m/--method to be set")
 
     if args.bbox is not None:
         parts = args.bbox.split(",")
@@ -130,20 +140,22 @@ def main() -> None:
         console.log(
             f"Classifying edges using [bold]{args.method.upper()}[/bold]..."
         )
-        G, k, model_metrics, extras = classify_edges(
-            G, args.method, args.n_clusters
+        G, model_metrics, extras = classify_edges(
+            G, args.method, args.n_clusters, use_pca=args.pca
         )
+        k = args.n_clusters
         console.log(
             f"[green]Classification complete.[/green] "
-            f"Selected [bold]{k}[/bold] clusters"
+            f"k = [bold]{k}[/bold]"
         )
+        model_metrics["v_measure"] = highway_cluster_v_measure(G)
         _print_model_metrics(args.method, model_metrics)
 
-        plot_dir = output_path.parent / "output"
+        plot_dir = output_path.parent
 
-        console.log("Generating KDE plots...")
-        kde_paths = plot_kde(G, plot_dir)
-        for p in kde_paths:
+        console.log("Generating violin plots...")
+        violin_paths = plot_violin(G, plot_dir)
+        for p in violin_paths:
             console.log(f"  Saved [bold]{p}[/bold]")
 
         map_path = plot_dir / "map.png"
@@ -151,25 +163,13 @@ def main() -> None:
         plot_map(G, map_path)
         console.log(f"  Saved [bold]{map_path}[/bold]")
 
-        if "silhouette_scores" in extras:
-            silhouette_path = plot_dir / "silhouette_vs_k.png"
-            console.log("Generating silhouette score vs k plot...")
-            plot_silhouette_vs_k(
-                extras["silhouette_scores"], k, silhouette_path
+        if "performance_per_k" in extras:
+            performance_path = plot_dir / "performance.png"
+            console.log("Generating performance plot (silhouette/CHI/V-measure/WCSS vs k)...")
+            plot_performance(
+                extras["performance_per_k"], k, performance_path
             )
-            console.log(f"  Saved [bold]{silhouette_path}[/bold]")
-
-        if "inertias" in extras:
-            elbow_path = plot_dir / "elbow.png"
-            console.log("Generating elbow plot...")
-            plot_elbow(extras["inertias"], k, elbow_path)
-            console.log(f"  Saved [bold]{elbow_path}[/bold]")
-
-        console.log("Generating highway x cluster heatmap...")
-        ct = highway_cluster_crosstab(G)
-        heatmap_path = plot_dir / "highway_cluster_heatmap.png"
-        plot_crosstab_heatmap(ct, heatmap_path)
-        console.log(f"  Saved [bold]{heatmap_path}[/bold]")
+            console.log(f"  Saved [bold]{performance_path}[/bold]")
 
         if args.method == "som":
             umatrix_path = plot_dir / "umatrix.png"
@@ -185,6 +185,17 @@ def main() -> None:
             plot_dendrogram(extras["hc_model"], k, dendro_path)
             console.log(f"  Saved [bold]{dendro_path}[/bold]")
 
+        if "pca_info" in extras:
+            pca_path = plot_dir / "pca.png"
+            console.log("Generating PCA scatter plot...")
+            labels_arr = np.array(
+                [data["cluster"] for _u, _v, _key, data in G.edges(keys=True, data=True)]
+            )
+            plot_pca_scatter(
+                extras["X_pca"], labels_arr, extras["pca_info"], pca_path
+            )
+            console.log(f"  Saved [bold]{pca_path}[/bold]")
+
         txt_path = plot_dir / "model_metrics.txt"
         export_txt(
             txt_path,
@@ -192,9 +203,11 @@ def main() -> None:
             method=args.method,
             n_clusters=k,
             model_metrics=model_metrics,
+            pca_info=extras.get("pca_info"),
         )
         console.log(f"  Saved [bold]{txt_path}[/bold]")
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     console.log(f"Exporting to [bold]{output}[/bold]...")
     if args.format == "graphml":
         export_graphml(G, output)
@@ -223,16 +236,24 @@ def _print_model_metrics(method: str, metrics: dict) -> None:
         "n_neurons": "Neurons",
         "kmeans_silhouette": "KMeans Silhouette (codebook)",
         "kmeans_inertia": "KMeans Inertia (codebook)",
+        "kmeans_calinski_harabasz_score": "KMeans Calinski-Harabasz (codebook)",
+        "calinski_harabasz_score": "Calinski-Harabasz Score",
         "fpc": "Fuzzy Partition Coefficient",
+        "bic": "BIC",
+        "aic": "AIC",
+        "log_likelihood": "Log-Likelihood",
+        "converged": "Converged",
         "linkage": "Linkage Method",
         "n_leaves": "Leaves",
+        "v_measure": "V-Measure (vs highway class)",
     }
     int_keys = {"n_iter", "grid_side", "n_neurons", "n_leaves"}
     str_keys = {"linkage"}
+    bool_keys = {"converged"}
 
     for key, value in metrics.items():
         label = labels.get(key, key)
-        if key in str_keys:
+        if key in str_keys or key in bool_keys:
             table.add_row(label, str(value))
         elif key in int_keys:
             table.add_row(label, str(value))

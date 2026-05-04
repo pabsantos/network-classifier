@@ -51,5 +51,5 @@ def classified_graph(sample_graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
     """Return the sample graph after K-Means classification (k=3)."""
     from network_classifier.classify import classify_edges
 
-    G, _k, _metrics, _extras = classify_edges(sample_graph, "kmeans", n_clusters=3)
+    G, _metrics, _extras = classify_edges(sample_graph, "kmeans", n_clusters=3)
     return G

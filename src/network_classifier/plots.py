@@ -4,13 +4,11 @@ from pathlib import Path
 
 import contextily as cx
 import numpy as np
-import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.patches import RegularPolygon
 from scipy.cluster.hierarchy import dendrogram
-from scipy.stats import gaussian_kde
 from sklearn.cluster import AgglomerativeClustering
 import osmnx as ox
 
@@ -36,12 +34,12 @@ def _cluster_colors(n: int) -> list[str]:
     return _COLORS[:n]
 
 
-def plot_kde(G: nx.MultiDiGraph, output_dir: Path) -> list[Path]:
-    """Save kernel density plots for each centrality metric, grouped by cluster.
+def plot_violin(G: nx.MultiDiGraph, output_dir: Path) -> list[Path]:
+    """Save violin plots for each centrality metric, grouped by cluster.
 
-    One PNG per metric is saved in *output_dir*, named ``<metric>_kde.png``.
-    The betweenness and clustering plots use a log-scaled x-axis (zero
-    values are excluded from the KDE since log(0) is undefined).
+    One PNG per metric is saved in *output_dir*, named ``<metric>_violin.png``.
+    Betweenness and clustering values are log10-transformed (zeros excluded)
+    before plotting so the y-axis tick labels read as ``10^x``.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -62,48 +60,99 @@ def plot_kde(G: nx.MultiDiGraph, output_dir: Path) -> list[Path]:
         fig, ax = plt.subplots(figsize=(8, 5))
         use_log = metric in ("betweenness", "clustering")
 
+        data_per_cluster: list[np.ndarray] = []
+        positions: list[int] = []
+        face_colors: list[str] = []
         for idx, cid in enumerate(sorted_ids):
-            vals = np.array(clusters[cid][metric])
+            vals = np.asarray(clusters[cid][metric], dtype=float)
+            if use_log:
+                vals = np.log10(vals[vals > 0])
             if len(vals) < 2:
                 continue
+            data_per_cluster.append(vals)
+            positions.append(cid)
+            face_colors.append(colors[idx])
 
-            if use_log:
-                vals_kde = np.log10(vals[vals > 0])
-                if len(vals_kde) < 2:
-                    continue
-                kde = gaussian_kde(vals_kde)
-                lo, hi = vals_kde.min(), vals_kde.max()
-                margin = (hi - lo) * 0.1 or 1e-6
-                x_log = np.linspace(lo - margin, hi + margin, 300)
-                x_real = 10**x_log
-                density = kde(x_log)
-                color = colors[idx]
-                ax.plot(x_real, density, label=f"Cluster {cid}", color=color)
-                ax.fill_between(x_real, density, alpha=0.15, color=color)
-            else:
-                kde = gaussian_kde(vals)
-                lo, hi = vals.min(), vals.max()
-                margin = (hi - lo) * 0.1 or 1e-6
-                x = np.linspace(lo - margin, hi + margin, 300)
-                color = colors[idx]
-                ax.plot(x, kde(x), label=f"Cluster {cid}", color=color)
-                ax.fill_between(x, kde(x), alpha=0.15, color=color)
+        if not data_per_cluster:
+            plt.close(fig)
+            continue
 
+        parts = ax.violinplot(
+            data_per_cluster,
+            positions=positions,
+            showmeans=False,
+            showmedians=True,
+            showextrema=True,
+        )
+        for body, color in zip(parts["bodies"], face_colors):
+            body.set_facecolor(color)
+            body.set_edgecolor(color)
+            body.set_alpha(0.6)
+        for key in ("cbars", "cmins", "cmaxes", "cmedians"):
+            if key in parts:
+                parts[key].set_color("#333333")
+                parts[key].set_linewidth(1.0)
+
+        ax.set_xticks(positions)
+        ax.set_xticklabels([f"Cluster {cid}" for cid in positions])
+        ax.set_xlabel("Cluster")
+        ylabel = metric.capitalize()
         if use_log:
-            ax.set_xscale("log")
-
-        ax.set_xlabel(metric.capitalize())
-        ax.set_ylabel("Density")
-        ax.set_title(f"Kernel Density \u2014 {metric.capitalize()}")
-        ax.legend()
+            ax.yaxis.set_major_formatter(
+                plt.FuncFormatter(lambda v, _pos: f"$10^{{{v:g}}}$")
+            )
+            ylabel = f"{metric.capitalize()} (log scale)"
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"Violin plot \u2014 {metric.capitalize()}")
+        ax.grid(True, axis="y", alpha=0.3)
         fig.tight_layout()
 
-        path = output_dir / f"{metric}_kde.png"
+        path = output_dir / f"{metric}_violin.png"
         fig.savefig(path, dpi=150)
         plt.close(fig)
         saved.append(path)
 
     return saved
+
+
+def plot_pca_scatter(
+    X_pca: np.ndarray,
+    labels: np.ndarray,
+    pca_info: dict,
+    filepath: Path,
+) -> None:
+    """Save a scatter plot of samples projected onto PC1/PC2, coloured by cluster."""
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+
+    labels = np.asarray(labels)
+    unique = sorted(set(int(c) for c in labels))
+    colors = _cluster_colors(len(unique))
+    evr = pca_info["explained_variance_ratio"]
+
+    fig, ax = plt.subplots(figsize=(8, 7))
+    for color, cid in zip(colors, unique):
+        mask = labels == cid
+        ax.scatter(
+            X_pca[mask, 0],
+            X_pca[mask, 1],
+            s=8,
+            alpha=0.5,
+            color=color,
+            label=f"Cluster {cid}",
+            edgecolors="none",
+        )
+
+    ax.set_xlabel(f"PC1 ({evr[0] * 100:.1f}%)")
+    ax.set_ylabel(f"PC2 ({evr[1] * 100:.1f}%)")
+    ax.grid(True, alpha=0.3)
+    legend = ax.legend(
+        title="Cluster", loc="best", markerscale=2.0, frameon=True
+    )
+    for handle in legend.legend_handles:
+        handle.set_alpha(1.0)
+    fig.tight_layout()
+    fig.savefig(filepath, dpi=150)
+    plt.close(fig)
 
 
 def plot_map(G: nx.MultiDiGraph, filepath: Path) -> None:
@@ -224,47 +273,56 @@ def _setup_hex_axis(ax, xx: np.ndarray, yy: np.ndarray) -> None:
     ax.set_ylabel("Grid Y")
 
 
-def plot_silhouette_vs_k(
-    scores: dict[int, float],
+def plot_performance(
+    performance_per_k: dict[int, dict[str, float]],
     selected_k: int,
     filepath: Path,
 ) -> None:
-    """Save a line plot of silhouette score vs k, highlighting the selected k.
+    """Save a 2x2 performance plot (silhouette, CHI, V-measure, WCSS) vs k.
 
     Parameters
     ----------
-    scores : dict[int, float]
-        Mapping of k to its average silhouette score.
+    performance_per_k : dict[int, dict[str, float]]
+        Mapping ``{k: {"silhouette", "chi", "v_measure", "wcss"}}``.
     selected_k : int
-        The k used for the final clustering (highlighted on the curve).
+        The k used for the final clustering (highlighted on every panel).
     filepath : Path
         Destination PNG path.
     """
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
-    ks = sorted(scores)
-    values = [scores[k] for k in ks]
+    ks = sorted(performance_per_k)
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(ks, values, marker="o", color="#4363d8", linewidth=2)
+    panels = [
+        ("silhouette", "Silhouette score"),
+        ("chi", "Calinski-Harabasz"),
+        ("v_measure", "V-Measure"),
+        ("wcss", "WCSS"),
+    ]
 
-    if selected_k in scores:
-        ax.scatter(
-            [selected_k],
-            [scores[selected_k]],
-            color="#e6194b",
-            s=120,
-            zorder=5,
-            label=f"Selected k = {selected_k}",
-        )
-        ax.axvline(selected_k, color="#e6194b", linestyle="--", alpha=0.4)
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10), sharex=True)
+    axes_flat = axes.flatten()
 
-    ax.set_xticks(ks)
-    ax.set_xlabel("Number of clusters (k)")
-    ax.set_ylabel("Silhouette score")
-    ax.set_title("Silhouette score vs k")
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+    for ax, (key, ylabel) in zip(axes_flat, panels):
+        values = [performance_per_k[k][key] for k in ks]
+        ax.plot(ks, values, marker="o", color="#4363d8", linewidth=2)
+
+        if selected_k in performance_per_k:
+            ax.scatter(
+                [selected_k],
+                [performance_per_k[selected_k][key]],
+                color="#e6194b",
+                s=120,
+                zorder=5,
+            )
+            ax.axvline(selected_k, color="#e6194b", linestyle="--", alpha=0.4)
+
+        ax.set_xticks(ks)
+        ax.set_ylabel(ylabel)
+        ax.grid(True, alpha=0.3)
+
+    for ax in axes[-1, :]:
+        ax.set_xlabel("Number of clusters (k)")
     fig.tight_layout()
     fig.savefig(filepath, dpi=150)
     plt.close(fig)
@@ -348,75 +406,5 @@ def plot_dendrogram(
     plt.close(fig)
 
 
-def plot_elbow(
-    inertias: dict[int, float],
-    selected_k: int,
-    filepath: Path,
-) -> None:
-    """Save an elbow plot (inertia vs k), highlighting the selected k.
-
-    Parameters
-    ----------
-    inertias : dict[int, float]
-        Mapping of k to KMeans inertia.
-    selected_k : int
-        The k used for the final clustering (highlighted on the curve).
-    filepath : Path
-        Destination PNG path.
-    """
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-
-    ks = sorted(inertias)
-    values = [inertias[k] for k in ks]
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(ks, values, marker="o", color="#4363d8", linewidth=2)
-
-    if selected_k in inertias:
-        ax.scatter(
-            [selected_k],
-            [inertias[selected_k]],
-            color="#e6194b",
-            s=120,
-            zorder=5,
-            label=f"Selected k = {selected_k}",
-        )
-        ax.axvline(selected_k, color="#e6194b", linestyle="--", alpha=0.4)
-
-    ax.set_xticks(ks)
-    ax.set_xlabel("Number of clusters (k)")
-    ax.set_ylabel("Inertia")
-    ax.set_title("Elbow Method")
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(filepath, dpi=150)
-    plt.close(fig)
 
 
-def plot_crosstab_heatmap(ct: pd.DataFrame, filepath: Path) -> None:
-    """Save a heatmap of the highway class x cluster cross-tabulation."""
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-
-    fig, ax = plt.subplots(figsize=(max(6, len(ct.columns) * 2), max(5, len(ct) * 0.5)))
-    im = ax.imshow(ct.values, aspect="auto", cmap="YlOrRd")
-
-    ax.set_xticks(range(len(ct.columns)))
-    ax.set_xticklabels([f"Cluster {c}" for c in ct.columns])
-    ax.set_yticks(range(len(ct.index)))
-    ax.set_yticklabels(ct.index)
-
-    for i in range(len(ct.index)):
-        for j in range(len(ct.columns)):
-            val = ct.values[i, j]
-            color = "white" if val > ct.values.max() * 0.6 else "black"
-            ax.text(j, i, f"{val:.1f}", ha="center", va="center", color=color,
-                    fontsize=9)
-
-    ax.set_xlabel("Cluster")
-    ax.set_ylabel("Highway class")
-    ax.set_title("Highway class x Cluster (km)")
-    fig.colorbar(im, ax=ax, label="Extension (km)")
-    fig.tight_layout()
-    fig.savefig(filepath, dpi=150)
-    plt.close(fig)
