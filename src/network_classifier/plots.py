@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.patches import RegularPolygon
 from scipy.cluster.hierarchy import dendrogram
-from scipy.stats import gaussian_kde
 from sklearn.cluster import AgglomerativeClustering
 import osmnx as ox
 
@@ -35,12 +34,12 @@ def _cluster_colors(n: int) -> list[str]:
     return _COLORS[:n]
 
 
-def plot_kde(G: nx.MultiDiGraph, output_dir: Path) -> list[Path]:
-    """Save kernel density plots for each centrality metric, grouped by cluster.
+def plot_violin(G: nx.MultiDiGraph, output_dir: Path) -> list[Path]:
+    """Save violin plots for each centrality metric, grouped by cluster.
 
-    One PNG per metric is saved in *output_dir*, named ``<metric>_kde.png``.
-    The betweenness and clustering plots use a log-scaled x-axis (zero
-    values are excluded from the KDE since log(0) is undefined).
+    One PNG per metric is saved in *output_dir*, named ``<metric>_violin.png``.
+    Betweenness and clustering values are log10-transformed (zeros excluded)
+    before plotting so the y-axis tick labels read as ``10^x``.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -61,43 +60,54 @@ def plot_kde(G: nx.MultiDiGraph, output_dir: Path) -> list[Path]:
         fig, ax = plt.subplots(figsize=(8, 5))
         use_log = metric in ("betweenness", "clustering")
 
+        data_per_cluster: list[np.ndarray] = []
+        positions: list[int] = []
+        face_colors: list[str] = []
         for idx, cid in enumerate(sorted_ids):
-            vals = np.array(clusters[cid][metric])
+            vals = np.asarray(clusters[cid][metric], dtype=float)
+            if use_log:
+                vals = np.log10(vals[vals > 0])
             if len(vals) < 2:
                 continue
+            data_per_cluster.append(vals)
+            positions.append(cid)
+            face_colors.append(colors[idx])
 
-            if use_log:
-                vals_kde = np.log10(vals[vals > 0])
-                if len(vals_kde) < 2:
-                    continue
-                kde = gaussian_kde(vals_kde)
-                lo, hi = vals_kde.min(), vals_kde.max()
-                margin = (hi - lo) * 0.1 or 1e-6
-                x_log = np.linspace(lo - margin, hi + margin, 300)
-                x_real = 10**x_log
-                density = kde(x_log)
-                color = colors[idx]
-                ax.plot(x_real, density, label=f"Cluster {cid}", color=color)
-                ax.fill_between(x_real, density, alpha=0.15, color=color)
-            else:
-                kde = gaussian_kde(vals)
-                lo, hi = vals.min(), vals.max()
-                margin = (hi - lo) * 0.1 or 1e-6
-                x = np.linspace(lo - margin, hi + margin, 300)
-                color = colors[idx]
-                ax.plot(x, kde(x), label=f"Cluster {cid}", color=color)
-                ax.fill_between(x, kde(x), alpha=0.15, color=color)
+        if not data_per_cluster:
+            plt.close(fig)
+            continue
 
+        parts = ax.violinplot(
+            data_per_cluster,
+            positions=positions,
+            showmeans=False,
+            showmedians=True,
+            showextrema=True,
+        )
+        for body, color in zip(parts["bodies"], face_colors):
+            body.set_facecolor(color)
+            body.set_edgecolor(color)
+            body.set_alpha(0.6)
+        for key in ("cbars", "cmins", "cmaxes", "cmedians"):
+            if key in parts:
+                parts[key].set_color("#333333")
+                parts[key].set_linewidth(1.0)
+
+        ax.set_xticks(positions)
+        ax.set_xticklabels([f"Cluster {cid}" for cid in positions])
+        ax.set_xlabel("Cluster")
+        ylabel = metric.capitalize()
         if use_log:
-            ax.set_xscale("log")
-
-        ax.set_xlabel(metric.capitalize())
-        ax.set_ylabel("Density")
-        ax.set_title(f"Kernel Density \u2014 {metric.capitalize()}")
-        ax.legend()
+            ax.yaxis.set_major_formatter(
+                plt.FuncFormatter(lambda v, _pos: f"$10^{{{v:g}}}$")
+            )
+            ylabel = f"{metric.capitalize()} (log scale)"
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"Violin plot \u2014 {metric.capitalize()}")
+        ax.grid(True, axis="y", alpha=0.3)
         fig.tight_layout()
 
-        path = output_dir / f"{metric}_kde.png"
+        path = output_dir / f"{metric}_violin.png"
         fig.savefig(path, dpi=150)
         plt.close(fig)
         saved.append(path)

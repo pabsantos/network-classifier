@@ -17,10 +17,10 @@ from network_classifier.graph import (
 )
 from network_classifier.plots import (
     plot_dendrogram,
-    plot_kde,
     plot_map,
     plot_performance,
     plot_umatrix,
+    plot_violin,
 )
 
 console = Console()
@@ -144,9 +144,9 @@ def main() -> None:
 
         plot_dir = output_path.parent
 
-        console.log("Generating KDE plots...")
-        kde_paths = plot_kde(G, plot_dir)
-        for p in kde_paths:
+        console.log("Generating violin plots...")
+        violin_paths = plot_violin(G, plot_dir)
+        for p in violin_paths:
             console.log(f"  Saved [bold]{p}[/bold]")
 
         map_path = plot_dir / "map.png"
