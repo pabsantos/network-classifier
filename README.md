@@ -51,10 +51,7 @@ network-classifier --polygon boundary.geojson -f gpkg -o output.gpkg
 # No clustering (centrality only)
 network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg
 
-# K-Means (auto-select k)
-network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m kmeans
-
-# K-Means (fixed k)
+# K-Means
 network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m kmeans -k 5
 
 # Fuzzy K-Means
@@ -67,22 +64,21 @@ network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m som -k 5
 network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m gmm -k 5
 
 # Hierarchical - Single Linkage
-network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_sl
+network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_sl -k 5
 
 # Hierarchical - Complete Linkage
-network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_cl
+network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_cl -k 5
 
 # Hierarchical - Ward
-network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_ward
+network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_ward -k 5
 
 # Hierarchical - Average Linkage
-network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_al
+network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_al -k 5
 ```
 
-When `-k` is omitted, the best k is selected automatically:
-- **K-Means, Fuzzy K-Means, and SOM**: highest silhouette score (k=2..10)
-- **GMM**: lowest BIC (k=2..10)
-- **Hierarchical**: largest gap in merge distances from the dendrogram (k=2..10)
+`-k` is required whenever `-m` is set. Per-k diagnostic curves
+(silhouette, inertia/BIC) for k=2..10 are still computed and saved as
+plots so you can validate your choice.
 
 ### Arguments
 
@@ -94,14 +90,14 @@ When `-k` is omitted, the best k is selected automatically:
 | `-f, --format` | Output format: `graphml` or `gpkg` | required |
 | `-o, --output` | Output file path | derived from input name |
 | `-m, --method` | Clustering method (see table below) | no clustering |
-| `-k, --n-clusters` | Number of clusters | auto-select |
+| `-k, --n-clusters` | Number of clusters | required when `-m` is set |
 
 | Method | Flag | Description |
 |---|---|---|
 | K-Means | `kmeans` | Classic partitional clustering |
 | Fuzzy K-Means | `fkmeans` | Fuzzy clustering via FCM |
 | SOM | `som` | Self-Organizing Map + K-Means on codebook |
-| GMM | `gmm` | Gaussian Mixture Model (model-selected by BIC) |
+| GMM | `gmm` | Gaussian Mixture Model |
 | Single Linkage | `hc_sl` | Hierarchical - nearest neighbor |
 | Complete Linkage | `hc_cl` | Hierarchical - farthest neighbor |
 | Ward | `hc_ward` | Hierarchical - minimizes within-cluster variance |

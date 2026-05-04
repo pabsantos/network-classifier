@@ -50,19 +50,6 @@ def _kmeans_eval(
     return sil_scores, inertias
 
 
-def _find_best_k(
-    X: np.ndarray, k_range: range = range(2, 11)
-) -> tuple[int, dict[int, float], dict[int, float]]:
-    """Select the best number of clusters by highest silhouette score.
-
-    Returns the chosen k, the ``{k: silhouette}`` mapping, and the
-    ``{k: inertia}`` mapping.
-    """
-    sil_scores, inertias = _kmeans_eval(X, k_range)
-    best_k = max(sil_scores, key=sil_scores.__getitem__)
-    return best_k, sil_scores, inertias
-
-
 def _fkmeans_eval(
     X: np.ndarray, k_range: range = range(2, 11), m: float = 2.0
 ) -> tuple[dict[int, float], dict[int, float]]:
@@ -89,35 +76,9 @@ def _fkmeans_eval(
     return scores, objectives
 
 
-def _find_best_k_hc(
-    X: np.ndarray, linkage_method: str, k_min: int = 2, k_max: int = 10
-) -> int:
-    """Select best k by largest gap in merge distances (dendrogram cut).
-
-    Fits once with ``compute_distances=True`` to obtain all merge distances,
-    then finds the largest jump among the last ``k_max - 1`` merges.
-    """
-    probe = AgglomerativeClustering(
-        n_clusters=2, linkage=linkage_method, compute_distances=True
-    )
-    probe.fit(X)
-    distances = probe.distances_
-
-    # Only inspect the tail: the last (k_max - 1) merges correspond to
-    # going from k_max clusters down to 1.
-    tail = distances[-(k_max - 1):]
-    gaps = np.diff(tail)
-    # gaps[i] = tail[i+1] - tail[i].  The largest gap at index i means
-    # cutting *before* merge tail[i+1], leaving (k_max - 1 - i) clusters
-    # when counted from the tail end.
-    best_idx = int(np.argmax(gaps))
-    best_k = (k_max - 1) - best_idx
-    return max(k_min, min(k_max, best_k))
-
-
 def _classify_with_hc(
-    X: np.ndarray, linkage_method: str, n_clusters: int | None
-) -> tuple[np.ndarray, int, dict[str, float], dict]:
+    X: np.ndarray, linkage_method: str, n_clusters: int
+) -> tuple[np.ndarray, dict[str, float], dict]:
     """Hierarchical (agglomerative) clustering via sklearn.
 
     Parameters
@@ -126,13 +87,9 @@ def _classify_with_hc(
         Scaled feature matrix.
     linkage_method : str
         Linkage criterion: "single", "complete", "ward", or "average".
-    n_clusters : int or None
-        Number of clusters. If None, auto-selected by largest merge-distance
-        gap.
+    n_clusters : int
+        Number of clusters.
     """
-    if n_clusters is None:
-        n_clusters = _find_best_k_hc(X, linkage_method)
-
     model = AgglomerativeClustering(
         n_clusters=n_clusters, linkage=linkage_method, compute_distances=True
     )
@@ -153,33 +110,29 @@ def _classify_with_hc(
         "hc_model": model,
     }
 
-    return labels, n_clusters, model_metrics, extras
+    return labels, model_metrics, extras
 
 
 def _classify_with_fkmeans(
-    X: np.ndarray, n_clusters: int | None, m: float = 2.0
-) -> tuple[np.ndarray, int, dict[str, float], dict]:
+    X: np.ndarray, n_clusters: int, m: float = 2.0
+) -> tuple[np.ndarray, dict[str, float], dict]:
     """Fuzzy K-Means clustering via skfuzzy cmeans.
 
     Parameters
     ----------
     X : np.ndarray
         Scaled feature matrix.
-    n_clusters : int or None
-        Number of clusters. If None, auto-selected by silhouette score.
+    n_clusters : int
+        Number of clusters.
     m : float
         Fuzziness exponent (default 2.0).
 
     Returns
     -------
     tuple
-        (labels, n_clusters, model_metrics, extras)
+        (labels, model_metrics, extras)
     """
-    if n_clusters is None:
-        silhouette_scores, objectives = _fkmeans_eval(X, m=m)
-        n_clusters = max(silhouette_scores, key=silhouette_scores.__getitem__)
-    else:
-        silhouette_scores, objectives = _fkmeans_eval(X, m=m)
+    silhouette_scores, objectives = _fkmeans_eval(X, m=m)
 
     cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(
         X.T, c=n_clusters, m=m, error=0.005, maxiter=1000, seed=42
@@ -204,7 +157,7 @@ def _classify_with_fkmeans(
         "inertias": objectives,
     }
 
-    return labels, n_clusters, model_metrics, extras
+    return labels, model_metrics, extras
 
 
 def _gmm_eval(
@@ -235,17 +188,14 @@ def _gmm_eval(
 
 
 def _classify_with_gmm(
-    X: np.ndarray, n_clusters: int | None
-) -> tuple[np.ndarray, int, dict[str, float], dict]:
+    X: np.ndarray, n_clusters: int
+) -> tuple[np.ndarray, dict[str, float], dict]:
     """Gaussian Mixture Model clustering via sklearn.
 
-    When ``n_clusters`` is None, k is selected by lowest BIC (standard
-    model-selection criterion for GMM).
+    Per-k BIC, AIC and silhouette scores (k=2..10) are computed and
+    returned in ``extras`` to support diagnostic plots.
     """
     sil_scores, bics, aics = _gmm_eval(X)
-
-    if n_clusters is None:
-        n_clusters = min(bics, key=bics.__getitem__)
 
     model = GaussianMixture(
         n_components=n_clusters, covariance_type="full", random_state=42
@@ -273,7 +223,7 @@ def _classify_with_gmm(
         "aics": aics,
     }
 
-    return labels, n_clusters, model_metrics, extras
+    return labels, model_metrics, extras
 
 
 def _train_som(
@@ -306,13 +256,13 @@ def _train_som(
 
 
 def _classify_with_som(
-    X: np.ndarray, n_clusters: int | None
-) -> tuple[np.ndarray, int, dict[str, float], dict]:
+    X: np.ndarray, n_clusters: int
+) -> tuple[np.ndarray, dict[str, float], dict]:
     """Two-stage SOM clustering: train SOM, then KMeans on the codebook.
 
     Each sample is assigned the cluster of its Best Matching Unit (BMU).
-    When ``n_clusters`` is None, k is selected automatically by silhouette
-    score on the SOM codebook.
+    Per-k silhouette scores and inertias on the SOM codebook (k=2..10) are
+    returned in ``extras`` to support diagnostic plots.
     """
     som, grid_side = _train_som(X)
 
@@ -320,16 +270,13 @@ def _classify_with_som(
     weights = som.get_weights()
     codebook = weights.reshape(-1, weights.shape[-1])
 
-    if n_clusters is None:
-        n_clusters, silhouette_scores, inertias = _find_best_k(codebook)
-    else:
-        if n_clusters > codebook.shape[0]:
-            raise ValueError(
-                f"n_clusters ({n_clusters}) exceeds number of SOM neurons "
-                f"({codebook.shape[0]})"
-            )
-        max_k = min(10, codebook.shape[0] - 1)
-        silhouette_scores, inertias = _kmeans_eval(codebook, range(2, max_k + 1))
+    if n_clusters > codebook.shape[0]:
+        raise ValueError(
+            f"n_clusters ({n_clusters}) exceeds number of SOM neurons "
+            f"({codebook.shape[0]})"
+        )
+    max_k = min(10, codebook.shape[0] - 1)
+    silhouette_scores, inertias = _kmeans_eval(codebook, range(2, max_k + 1))
 
     km = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
     neuron_labels = km.fit_predict(codebook)
@@ -371,12 +318,12 @@ def _classify_with_som(
         "inertias": inertias,
     }
 
-    return sample_labels, n_clusters, model_metrics, extras
+    return sample_labels, model_metrics, extras
 
 
 def classify_edges(
-    G: nx.MultiDiGraph, method: str, n_clusters: int | None = None
-) -> tuple[nx.MultiDiGraph, int, dict[str, float], dict]:
+    G: nx.MultiDiGraph, method: str, n_clusters: int
+) -> tuple[nx.MultiDiGraph, dict[str, float], dict]:
     """Cluster edges by their centrality metrics.
 
     Parameters
@@ -387,16 +334,16 @@ def classify_edges(
     method : str
         Clustering method: "kmeans", "som", "fkmeans", "gmm", or one of the
         hierarchical variants (hc_sl, hc_cl, hc_ward, hc_al).
-    n_clusters : int or None
-        Number of clusters. If None, the best k is selected automatically.
+    n_clusters : int
+        Number of clusters to fit.
 
     Returns
     -------
-    tuple[nx.MultiDiGraph, int, dict[str, float], dict]
-        The graph with a "cluster" attribute on each edge, the number of
-        clusters used, a dict of model metrics, and a dict of method-specific
-        extras (empty for kmeans; contains the trained SOM and the
-        neuron-to-cluster grid for som).
+    tuple[nx.MultiDiGraph, dict[str, float], dict]
+        The graph with a "cluster" attribute on each edge, a dict of model
+        metrics, and a dict of method-specific extras (e.g. the trained SOM
+        and the neuron-to-cluster grid for som; per-k silhouette/inertia
+        diagnostics for kmeans/fkmeans/som).
     """
     edge_order: list[tuple[int, int, int]] = []
     features: list[list[float]] = []
@@ -416,34 +363,27 @@ def classify_edges(
     if method in HC_METHODS:
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
-        labels, n_clusters, model_metrics, extras = _classify_with_hc(
+        labels, model_metrics, extras = _classify_with_hc(
             X_scaled, HC_METHODS[method], n_clusters
         )
     elif method == "som":
         # SOMs work better with bounded inputs.
         X_som = MinMaxScaler().fit_transform(X)
-        labels, n_clusters, model_metrics, extras = _classify_with_som(
-            X_som, n_clusters
-        )
+        labels, model_metrics, extras = _classify_with_som(X_som, n_clusters)
     elif method == "gmm":
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
-        labels, n_clusters, model_metrics, extras = _classify_with_gmm(
-            X_scaled, n_clusters
-        )
+        labels, model_metrics, extras = _classify_with_gmm(X_scaled, n_clusters)
     elif method == "fkmeans":
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
-        labels, n_clusters, model_metrics, extras = _classify_with_fkmeans(
+        labels, model_metrics, extras = _classify_with_fkmeans(
             X_scaled, n_clusters
         )
     elif method == "kmeans":
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
-        if n_clusters is None:
-            n_clusters, silhouette_scores, inertias = _find_best_k(X_scaled)
-        else:
-            silhouette_scores, inertias = _kmeans_eval(X_scaled)
+        silhouette_scores, inertias = _kmeans_eval(X_scaled)
         model = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
         labels = model.fit_predict(X_scaled)
         model_metrics = {
@@ -469,7 +409,7 @@ def classify_edges(
     for i, (u, v, key) in enumerate(edge_order):
         G[u][v][key]["cluster"] = int(labels[i])
 
-    return G, n_clusters, model_metrics, extras
+    return G, model_metrics, extras
 
 
 def cluster_summary(

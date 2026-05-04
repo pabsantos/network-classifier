@@ -85,7 +85,7 @@ def main() -> None:
         "--n-clusters",
         type=int,
         default=None,
-        help="Number of clusters (default: auto-select best k)",
+        help="Number of clusters (required when -m/--method is set)",
     )
 
     argv = sys.argv[1:]
@@ -94,6 +94,9 @@ def main() -> None:
             argv = argv[:i] + [f"--bbox={argv[i + 1]}"] + argv[i + 2:]
             break
     args = parser.parse_args(argv)
+
+    if args.method is not None and args.n_clusters is None:
+        parser.error("-k/--n-clusters is required when -m/--method is set")
 
     if args.bbox is not None:
         parts = args.bbox.split(",")
@@ -129,12 +132,13 @@ def main() -> None:
         console.log(
             f"Classifying edges using [bold]{args.method.upper()}[/bold]..."
         )
-        G, k, model_metrics, extras = classify_edges(
+        G, model_metrics, extras = classify_edges(
             G, args.method, args.n_clusters
         )
+        k = args.n_clusters
         console.log(
             f"[green]Classification complete.[/green] "
-            f"Selected [bold]{k}[/bold] clusters"
+            f"k = [bold]{k}[/bold]"
         )
         model_metrics["v_measure"] = highway_cluster_v_measure(G)
         _print_model_metrics(args.method, model_metrics)

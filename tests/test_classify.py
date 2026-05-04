@@ -7,8 +7,6 @@ import pytest
 from network_classifier.classify import (
     HC_METHODS,
     METRICS,
-    _find_best_k,
-    _find_best_k_hc,
     _fkmeans_eval,
     _kmeans_eval,
     classify_edges,
@@ -39,15 +37,6 @@ class TestKmeansEval:
             assert -1 <= v <= 1
 
 
-class TestFindBestK:
-    def test_returns_best_k_in_range(self):
-        rng = np.random.RandomState(0)
-        X = rng.randn(200, 3)
-        best_k, sil, inertias = _find_best_k(X, k_range=range(2, 6))
-        assert 2 <= best_k <= 5
-        assert best_k == max(sil, key=sil.__getitem__)
-
-
 class TestFkmeansEval:
     def test_returns_scores_and_objectives(self):
         rng = np.random.RandomState(0)
@@ -59,15 +48,6 @@ class TestFkmeansEval:
             assert -1 <= v <= 1
 
 
-class TestFindBestKHC:
-    @pytest.mark.parametrize("linkage", ["single", "complete", "ward", "average"])
-    def test_returns_k_in_range(self, linkage):
-        rng = np.random.RandomState(0)
-        X = rng.randn(100, 3)
-        k = _find_best_k_hc(X, linkage, k_min=2, k_max=10)
-        assert 2 <= k <= 10
-
-
 # ---------------------------------------------------------------------------
 # classify_edges
 # ---------------------------------------------------------------------------
@@ -75,46 +55,33 @@ class TestFindBestKHC:
 class TestClassifyEdges:
     @pytest.mark.parametrize("method", ["kmeans", "fkmeans"])
     def test_fixed_k(self, sample_graph, method):
-        G, k, metrics, extras = classify_edges(sample_graph, method, n_clusters=3)
-        assert k == 3
+        G, metrics, extras = classify_edges(sample_graph, method, n_clusters=3)
         labels = {data["cluster"] for *_, data in G.edges(data=True)}
         assert labels == {0, 1, 2}
         assert "silhouette_score" in metrics
-
-    @pytest.mark.parametrize("method", ["kmeans", "fkmeans"])
-    def test_auto_k(self, sample_graph, method):
-        G, k, metrics, extras = classify_edges(sample_graph, method, n_clusters=None)
-        assert 2 <= k <= 10
         assert "silhouette_scores" in extras
         assert "inertias" in extras
 
     @pytest.mark.parametrize("method", list(HC_METHODS.keys()))
     def test_hc_fixed_k(self, sample_graph, method):
-        G, k, metrics, extras = classify_edges(sample_graph, method, n_clusters=3)
-        assert k == 3
+        G, metrics, extras = classify_edges(sample_graph, method, n_clusters=3)
         assert metrics["linkage"] == HC_METHODS[method]
         assert "hc_model" in extras
 
-    @pytest.mark.parametrize("method", list(HC_METHODS.keys()))
-    def test_hc_auto_k(self, sample_graph, method):
-        G, k, metrics, extras = classify_edges(sample_graph, method, n_clusters=None)
-        assert 2 <= k <= 10
-
     def test_som_fixed_k(self, sample_graph):
-        G, k, metrics, extras = classify_edges(sample_graph, "som", n_clusters=3)
-        assert k == 3
+        G, metrics, extras = classify_edges(sample_graph, "som", n_clusters=3)
         assert "som" in extras
         assert "inertias" in extras
 
     def test_unknown_method_raises(self, sample_graph):
         with pytest.raises(ValueError, match="Unknown method"):
-            classify_edges(sample_graph, "invalid_method")
+            classify_edges(sample_graph, "invalid_method", n_clusters=3)
 
     def test_cluster_attr_set_on_all_edges(self, sample_graph):
-        G, k, _, _ = classify_edges(sample_graph, "kmeans", n_clusters=2)
+        G, _, _ = classify_edges(sample_graph, "kmeans", n_clusters=2)
         for u, v, key, data in G.edges(keys=True, data=True):
             assert "cluster" in data
-            assert 0 <= data["cluster"] < k
+            assert 0 <= data["cluster"] < 2
 
     def test_log1p_applied_to_betweenness(self, sample_graph):
         """Verify betweenness is log1p-transformed (edge attrs unchanged)."""
