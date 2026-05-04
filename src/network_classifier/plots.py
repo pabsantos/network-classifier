@@ -238,7 +238,7 @@ def plot_performance(
     selected_k: int,
     filepath: Path,
 ) -> None:
-    """Save a 4-row performance plot (silhouette, CHI, V-measure, WCSS) vs k.
+    """Save a 2x2 performance plot (silhouette, CHI, V-measure, WCSS) vs k.
 
     Parameters
     ----------
@@ -254,16 +254,16 @@ def plot_performance(
     ks = sorted(performance_per_k)
 
     panels = [
-        ("silhouette", "Silhouette score", "Silhouette score vs k"),
-        ("chi", "Calinski-Harabasz", "Calinski-Harabasz Index vs k"),
-        ("v_measure", "V-Measure", "V-Measure (vs highway class) vs k"),
-        ("wcss", "WCSS", "WCSS (Elbow) vs k"),
+        ("silhouette", "Silhouette score"),
+        ("chi", "Calinski-Harabasz"),
+        ("v_measure", "V-Measure"),
+        ("wcss", "WCSS"),
     ]
 
-    fig, axes = plt.subplots(len(panels), 1, figsize=(8, 4 * len(panels)),
-                             sharex=True)
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10), sharex=True)
+    axes_flat = axes.flatten()
 
-    for ax, (key, ylabel, title) in zip(axes, panels):
+    for ax, (key, ylabel) in zip(axes_flat, panels):
         values = [performance_per_k[k][key] for k in ks]
         ax.plot(ks, values, marker="o", color="#4363d8", linewidth=2)
 
@@ -274,17 +274,15 @@ def plot_performance(
                 color="#e6194b",
                 s=120,
                 zorder=5,
-                label=f"k = {selected_k}",
             )
             ax.axvline(selected_k, color="#e6194b", linestyle="--", alpha=0.4)
-            ax.legend()
 
         ax.set_xticks(ks)
         ax.set_ylabel(ylabel)
-        ax.set_title(title)
         ax.grid(True, alpha=0.3)
 
-    axes[-1].set_xlabel("Number of clusters (k)")
+    for ax in axes[-1, :]:
+        ax.set_xlabel("Number of clusters (k)")
     fig.tight_layout()
     fig.savefig(filepath, dpi=150)
     plt.close(fig)
