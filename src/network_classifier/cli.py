@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from network_classifier.centrality import compute_centrality
-from network_classifier.classify import classify_edges, highway_cluster_crosstab
+from network_classifier.classify import classify_edges, highway_cluster_v_measure
 from network_classifier.export import export_geopackage, export_graphml, export_txt
 from network_classifier.graph import (
     load_graph,
@@ -16,7 +16,6 @@ from network_classifier.graph import (
     load_graph_from_polygon,
 )
 from network_classifier.plots import (
-    plot_crosstab_heatmap,
     plot_dendrogram,
     plot_elbow,
     plot_kde,
@@ -137,6 +136,7 @@ def main() -> None:
             f"[green]Classification complete.[/green] "
             f"Selected [bold]{k}[/bold] clusters"
         )
+        model_metrics["v_measure"] = highway_cluster_v_measure(G)
         _print_model_metrics(args.method, model_metrics)
 
         plot_dir = output_path.parent / "output"
@@ -164,12 +164,6 @@ def main() -> None:
             console.log("Generating elbow plot...")
             plot_elbow(extras["inertias"], k, elbow_path)
             console.log(f"  Saved [bold]{elbow_path}[/bold]")
-
-        console.log("Generating highway x cluster heatmap...")
-        ct = highway_cluster_crosstab(G)
-        heatmap_path = plot_dir / "highway_cluster_heatmap.png"
-        plot_crosstab_heatmap(ct, heatmap_path)
-        console.log(f"  Saved [bold]{heatmap_path}[/bold]")
 
         if args.method == "som":
             umatrix_path = plot_dir / "umatrix.png"
@@ -232,6 +226,7 @@ def _print_model_metrics(method: str, metrics: dict) -> None:
         "converged": "Converged",
         "linkage": "Linkage Method",
         "n_leaves": "Leaves",
+        "v_measure": "V-Measure (vs highway class)",
     }
     int_keys = {"n_iter", "grid_side", "n_neurons", "n_leaves"}
     str_keys = {"linkage"}

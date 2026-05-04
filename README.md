@@ -130,6 +130,7 @@ When clustering is enabled, metrics are printed to the terminal and saved to `ou
 | Fuzzy K-Means | FPC (Fuzzy Partition Coefficient), Silhouette Score, Iterations |
 | SOM | Quantization Error, Topographic Error, Grid Side, Neurons, KMeans Silhouette/Inertia |
 | Hierarchical | Linkage Method, Silhouette Score, Leaves |
+| All | V-Measure (vs OSM highway class) |
 
 ### Generated plots
 
@@ -143,7 +144,6 @@ Plots are saved to the `output/` directory:
 | `elbow.png` | kmeans, fkmeans, som | Elbow method (inertia vs k) |
 | `dendrogram.png` | hc_* | Dendrogram with cut line |
 | `umatrix.png` | som | U-Matrix and neuron cluster assignments |
-| `highway_cluster_heatmap.png` | All | Highway class x cluster heatmap |
 
 ## Contributing
 

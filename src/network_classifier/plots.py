@@ -4,7 +4,6 @@ from pathlib import Path
 
 import contextily as cx
 import numpy as np
-import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, Normalize
@@ -394,29 +393,3 @@ def plot_elbow(
     plt.close(fig)
 
 
-def plot_crosstab_heatmap(ct: pd.DataFrame, filepath: Path) -> None:
-    """Save a heatmap of the highway class x cluster cross-tabulation."""
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-
-    fig, ax = plt.subplots(figsize=(max(6, len(ct.columns) * 2), max(5, len(ct) * 0.5)))
-    im = ax.imshow(ct.values, aspect="auto", cmap="YlOrRd")
-
-    ax.set_xticks(range(len(ct.columns)))
-    ax.set_xticklabels([f"Cluster {c}" for c in ct.columns])
-    ax.set_yticks(range(len(ct.index)))
-    ax.set_yticklabels(ct.index)
-
-    for i in range(len(ct.index)):
-        for j in range(len(ct.columns)):
-            val = ct.values[i, j]
-            color = "white" if val > ct.values.max() * 0.6 else "black"
-            ax.text(j, i, f"{val:.1f}", ha="center", va="center", color=color,
-                    fontsize=9)
-
-    ax.set_xlabel("Cluster")
-    ax.set_ylabel("Highway class")
-    ax.set_title("Highway class x Cluster (km)")
-    fig.colorbar(im, ax=ax, label="Extension (km)")
-    fig.tight_layout()
-    fig.savefig(filepath, dpi=150)
-    plt.close(fig)

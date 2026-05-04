@@ -13,7 +13,7 @@ from network_classifier.classify import (
     _kmeans_eval,
     classify_edges,
     cluster_summary,
-    highway_cluster_crosstab,
+    highway_cluster_v_measure,
 )
 
 
@@ -145,23 +145,29 @@ class TestClusterSummary:
 
 
 # ---------------------------------------------------------------------------
-# highway_cluster_crosstab
+# highway_cluster_v_measure
 # ---------------------------------------------------------------------------
 
-class TestHighwayClusterCrosstab:
-    def test_crosstab_shape(self, classified_graph):
-        ct = highway_cluster_crosstab(classified_graph)
-        assert ct.shape[1] == 3  # 3 clusters
-        assert ct.shape[0] > 0  # at least one highway type
-        assert (ct >= 0).all().all()
+class TestHighwayClusterVMeasure:
+    def test_v_measure_in_range(self, classified_graph):
+        score = highway_cluster_v_measure(classified_graph)
+        assert isinstance(score, float)
+        assert 0.0 <= score <= 1.0
 
-    def test_link_suffix_removed(self, classified_graph):
-        # Add an edge with _link suffix
-        classified_graph.add_edge(
-            0, 1, key=99,
-            highway="primary_link", cluster=0, length=100.0,
-            betweenness=0.01, clustering=0.1, degree=4.0,
-        )
-        ct = highway_cluster_crosstab(classified_graph)
-        assert "primary_link" not in ct.index
-        assert "primary" in ct.index
+    def test_perfect_agreement_is_one(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(0, 1, key=0, highway="primary", cluster=0)
+        G.add_edge(1, 2, key=0, highway="primary", cluster=0)
+        G.add_edge(2, 3, key=0, highway="residential", cluster=1)
+        G.add_edge(3, 4, key=0, highway="residential", cluster=1)
+        assert highway_cluster_v_measure(G) == pytest.approx(1.0)
+
+    def test_link_suffix_normalized(self):
+        # primary_link must be folded into primary so it shares a class
+        # with regular primary edges.
+        G = nx.MultiDiGraph()
+        G.add_edge(0, 1, key=0, highway="primary", cluster=0)
+        G.add_edge(1, 2, key=0, highway="primary_link", cluster=0)
+        G.add_edge(2, 3, key=0, highway="residential", cluster=1)
+        G.add_edge(3, 4, key=0, highway="residential", cluster=1)
+        assert highway_cluster_v_measure(G) == pytest.approx(1.0)

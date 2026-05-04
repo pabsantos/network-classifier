@@ -1,12 +1,15 @@
 """Classify edges into clusters based on centrality metrics."""
 
 import numpy as np
-import pandas as pd
 import networkx as nx
 import skfuzzy as fuzz
 from minisom import MiniSom
 from sklearn.cluster import AgglomerativeClustering, KMeans
-from sklearn.metrics import calinski_harabasz_score, silhouette_score
+from sklearn.metrics import (
+    calinski_harabasz_score,
+    silhouette_score,
+    v_measure_score,
+)
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
@@ -504,22 +507,15 @@ def cluster_summary(
     return summary
 
 
-def highway_cluster_crosstab(
-    G: nx.MultiDiGraph,
-) -> pd.DataFrame:
-    """Build a cross-tabulation between OSM highway class and cluster label,
-    weighted by edge length (km).
+def highway_cluster_v_measure(G: nx.MultiDiGraph) -> float:
+    """V-measure between OSM highway class (ground truth) and cluster label.
 
     When a highway attribute is a list (multi-typed edge), the first value is
-    used.
-
-    Returns
-    -------
-    pd.DataFrame
-        Rows = highway classes, columns = cluster IDs, values = total length
-        in km.
+    used. The ``_link`` suffix is stripped so e.g. ``primary_link`` is folded
+    into ``primary``.
     """
-    records: list[dict] = []
+    highways: list[str] = []
+    clusters: list[int] = []
 
     for _u, _v, _key, data in G.edges(keys=True, data=True):
         hw = data.get("highway", "unknown")
@@ -527,20 +523,7 @@ def highway_cluster_crosstab(
             hw = hw[0]
         if hw.endswith("_link"):
             hw = hw.removesuffix("_link")
-        records.append({
-            "highway": hw,
-            "cluster": data["cluster"],
-            "length_km": data.get("length", 0.0) / 1000.0,
-        })
+        highways.append(hw)
+        clusters.append(int(data["cluster"]))
 
-    df = pd.DataFrame(records)
-    ct = df.pivot_table(
-        index="highway",
-        columns="cluster",
-        values="length_km",
-        aggfunc="sum",
-        fill_value=0.0,
-    )
-    ct.columns.name = "cluster"
-    ct = ct.loc[ct.sum(axis=1).sort_values(ascending=False).index]
-    return ct
+    return float(v_measure_score(highways, clusters))

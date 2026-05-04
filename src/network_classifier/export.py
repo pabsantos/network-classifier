@@ -41,6 +41,7 @@ def export_txt(
         "aic": "AIC",
         "log_likelihood": "Log-Likelihood",
         "converged": "Converged",
+        "v_measure": "V-Measure (vs highway class)",
     }
     _INT_KEYS = {"n_iter", "grid_side", "n_neurons", "n_leaves"}
 
