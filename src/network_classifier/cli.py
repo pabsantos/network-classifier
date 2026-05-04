@@ -5,6 +5,7 @@ import re
 import sys
 from pathlib import Path
 
+import numpy as np
 from rich.console import Console
 from rich.table import Table
 from network_classifier.centrality import compute_centrality
@@ -18,6 +19,7 @@ from network_classifier.graph import (
 from network_classifier.plots import (
     plot_dendrogram,
     plot_map,
+    plot_pca_scatter,
     plot_performance,
     plot_umatrix,
     plot_violin,
@@ -86,6 +88,11 @@ def main() -> None:
         default=None,
         help="Number of clusters (required when -m/--method is set)",
     )
+    parser.add_argument(
+        "--pca",
+        action="store_true",
+        help="Project features onto PC1/PC2 before clustering",
+    )
 
     argv = sys.argv[1:]
     for i, arg in enumerate(argv):
@@ -96,6 +103,8 @@ def main() -> None:
 
     if args.method is not None and args.n_clusters is None:
         parser.error("-k/--n-clusters is required when -m/--method is set")
+    if args.pca and args.method is None:
+        parser.error("--pca requires -m/--method to be set")
 
     if args.bbox is not None:
         parts = args.bbox.split(",")
@@ -132,7 +141,7 @@ def main() -> None:
             f"Classifying edges using [bold]{args.method.upper()}[/bold]..."
         )
         G, model_metrics, extras = classify_edges(
-            G, args.method, args.n_clusters
+            G, args.method, args.n_clusters, use_pca=args.pca
         )
         k = args.n_clusters
         console.log(
@@ -176,6 +185,17 @@ def main() -> None:
             plot_dendrogram(extras["hc_model"], k, dendro_path)
             console.log(f"  Saved [bold]{dendro_path}[/bold]")
 
+        if "pca_info" in extras:
+            pca_path = plot_dir / "pca.png"
+            console.log("Generating PCA scatter plot...")
+            labels_arr = np.array(
+                [data["cluster"] for _u, _v, _key, data in G.edges(keys=True, data=True)]
+            )
+            plot_pca_scatter(
+                extras["X_pca"], labels_arr, extras["pca_info"], pca_path
+            )
+            console.log(f"  Saved [bold]{pca_path}[/bold]")
+
         txt_path = plot_dir / "model_metrics.txt"
         export_txt(
             txt_path,
@@ -183,6 +203,7 @@ def main() -> None:
             method=args.method,
             n_clusters=k,
             model_metrics=model_metrics,
+            pca_info=extras.get("pca_info"),
         )
         console.log(f"  Saved [bold]{txt_path}[/bold]")
 

@@ -7,6 +7,7 @@ import pytest
 from network_classifier.classify import (
     HC_METHODS,
     METRICS,
+    _apply_pca,
     _fkmeans_eval,
     _kmeans_eval,
     classify_edges,
@@ -85,6 +86,30 @@ class TestClassifyEdges:
             assert "cluster" in data
             assert 0 <= data["cluster"] < 2
 
+    @pytest.mark.parametrize(
+        "method", ["kmeans", "fkmeans", "gmm", "som", "hc_ward"]
+    )
+    def test_pca_projects_to_two_components(self, sample_graph, method):
+        G, _metrics, extras = classify_edges(
+            sample_graph, method, n_clusters=3, use_pca=True
+        )
+        assert "pca_info" in extras
+        assert "X_pca" in extras
+        assert extras["X_pca"].shape == (G.number_of_edges(), 2)
+        info = extras["pca_info"]
+        assert len(info["explained_variance_ratio"]) == 2
+        assert len(info["components"]) == 2
+        assert len(info["components"][0]) == len(METRICS)
+        assert info["feature_names"] == list(METRICS)
+        assert 0.0 <= sum(info["explained_variance_ratio"]) <= 1.0 + 1e-9
+
+    def test_pca_disabled_by_default(self, sample_graph):
+        _, _metrics, extras = classify_edges(
+            sample_graph, "kmeans", n_clusters=3
+        )
+        assert "pca_info" not in extras
+        assert "X_pca" not in extras
+
     def test_log1p_applied_to_betweenness(self, sample_graph):
         """Verify betweenness is log1p-transformed (edge attrs unchanged)."""
         original = {
@@ -94,6 +119,33 @@ class TestClassifyEdges:
         classify_edges(sample_graph, "kmeans", n_clusters=2)
         for (u, v, key), orig in original.items():
             assert sample_graph[u][v][key]["betweenness"] == orig
+
+
+# ---------------------------------------------------------------------------
+# _apply_pca
+# ---------------------------------------------------------------------------
+
+
+class TestApplyPCA:
+    def test_returns_two_components_and_info(self):
+        rng = np.random.RandomState(0)
+        X = rng.randn(50, 3)
+        X_2d, info = _apply_pca(X)
+        assert X_2d.shape == (50, 2)
+        for key in (
+            "explained_variance_ratio",
+            "explained_variance",
+            "singular_values",
+            "components",
+            "mean",
+            "feature_names",
+        ):
+            assert key in info
+        assert len(info["explained_variance_ratio"]) == 2
+        assert len(info["components"]) == 2
+        assert len(info["components"][0]) == 3
+        assert len(info["mean"]) == 3
+        assert info["feature_names"] == list(METRICS)
 
 
 # ---------------------------------------------------------------------------

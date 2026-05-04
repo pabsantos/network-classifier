@@ -115,6 +115,46 @@ def plot_violin(G: nx.MultiDiGraph, output_dir: Path) -> list[Path]:
     return saved
 
 
+def plot_pca_scatter(
+    X_pca: np.ndarray,
+    labels: np.ndarray,
+    pca_info: dict,
+    filepath: Path,
+) -> None:
+    """Save a scatter plot of samples projected onto PC1/PC2, coloured by cluster."""
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+
+    labels = np.asarray(labels)
+    unique = sorted(set(int(c) for c in labels))
+    colors = _cluster_colors(len(unique))
+    evr = pca_info["explained_variance_ratio"]
+
+    fig, ax = plt.subplots(figsize=(8, 7))
+    for color, cid in zip(colors, unique):
+        mask = labels == cid
+        ax.scatter(
+            X_pca[mask, 0],
+            X_pca[mask, 1],
+            s=8,
+            alpha=0.5,
+            color=color,
+            label=f"Cluster {cid}",
+            edgecolors="none",
+        )
+
+    ax.set_xlabel(f"PC1 ({evr[0] * 100:.1f}%)")
+    ax.set_ylabel(f"PC2 ({evr[1] * 100:.1f}%)")
+    ax.grid(True, alpha=0.3)
+    legend = ax.legend(
+        title="Cluster", loc="best", markerscale=2.0, frameon=True
+    )
+    for handle in legend.legend_handles:
+        handle.set_alpha(1.0)
+    fig.tight_layout()
+    fig.savefig(filepath, dpi=150)
+    plt.close(fig)
+
+
 def plot_map(G: nx.MultiDiGraph, filepath: Path) -> None:
     """Save a map of edges colored by cluster class."""
     filepath.parent.mkdir(parents=True, exist_ok=True)

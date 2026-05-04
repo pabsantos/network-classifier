@@ -80,6 +80,23 @@ network-classifier "Curitiba, Brazil" -f gpkg -o output.gpkg -m hc_al -k 5
 (silhouette, inertia/BIC) for k=2..10 are still computed and saved as
 plots so you can validate your choice.
 
+### PCA pre-processing (optional)
+
+Pass `--pca` together with `-m` to project the scaled centrality features
+onto their first two principal components before clustering. The chosen
+model then fits on PC1/PC2:
+
+```bash
+network-classifier "Curitiba, Brazil" -f gpkg -m kmeans -k 5 --pca
+```
+
+When `--pca` is set, two extra outputs are produced:
+
+- `output/pca.png` — scatter of PC1 vs PC2 coloured by cluster.
+- A `PCA Parameters` section in `output/model_metrics.txt` with the
+  per-component explained variance, cumulative variance, singular values,
+  feature loadings and pre-PCA feature means.
+
 ### Arguments
 
 | Argument | Description | Default |
@@ -91,6 +108,7 @@ plots so you can validate your choice.
 | `-o, --output` | Output file path | derived from input name |
 | `-m, --method` | Clustering method (see table below) | no clustering |
 | `-k, --n-clusters` | Number of clusters | required when `-m` is set |
+| `--pca` | Project features onto PC1/PC2 before clustering | off (requires `-m`) |
 
 | Method | Flag | Description |
 |---|---|---|
@@ -134,11 +152,12 @@ Plots are saved to the `output/` directory:
 
 | File | Methods | Description |
 |---|---|---|
-| `*_kde.png` | All | KDE distribution per metric and cluster |
+| `*_violin.png` | All | Violin plot per metric, one violin per cluster |
 | `map.png` | All | Map of road segments colored by cluster |
-| `performance.png` | kmeans, fkmeans, som | Stacked subplots of silhouette / CHI / V-measure / WCSS vs k |
+| `performance.png` | kmeans, fkmeans, som | 2x2 grid of silhouette / CHI / V-measure / WCSS vs k |
 | `dendrogram.png` | hc_* | Dendrogram with cut line |
 | `umatrix.png` | som | U-Matrix and neuron cluster assignments |
+| `pca.png` | All (with `--pca`) | Scatter of samples on PC1/PC2 coloured by cluster |
 
 ## Contributing
 

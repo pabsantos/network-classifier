@@ -5,6 +5,7 @@ import networkx as nx
 import skfuzzy as fuzz
 from minisom import MiniSom
 from sklearn.cluster import AgglomerativeClustering, KMeans
+from sklearn.decomposition import PCA
 from sklearn.metrics import (
     calinski_harabasz_score,
     silhouette_score,
@@ -40,6 +41,29 @@ def _normalize_highway(hw) -> str:
     if hw.endswith("_link"):
         hw = hw.removesuffix("_link")
     return hw
+
+
+def _apply_pca(X: np.ndarray) -> tuple[np.ndarray, dict]:
+    """Project *X* onto its first two principal components.
+
+    Returns
+    -------
+    tuple
+        ``(X_2d, info)`` where ``info`` carries the parameters needed to
+        report and plot the projection: per-component explained variance,
+        feature loadings and the feature names.
+    """
+    pca = PCA(n_components=2, random_state=42)
+    X_2d = pca.fit_transform(X)
+    info = {
+        "explained_variance_ratio": pca.explained_variance_ratio_.tolist(),
+        "explained_variance": pca.explained_variance_.tolist(),
+        "singular_values": pca.singular_values_.tolist(),
+        "components": pca.components_.tolist(),
+        "mean": pca.mean_.tolist(),
+        "feature_names": list(METRICS),
+    }
+    return X_2d, info
 
 
 def _per_k_metrics(
@@ -359,7 +383,10 @@ def _classify_with_som(
 
 
 def classify_edges(
-    G: nx.MultiDiGraph, method: str, n_clusters: int
+    G: nx.MultiDiGraph,
+    method: str,
+    n_clusters: int,
+    use_pca: bool = False,
 ) -> tuple[nx.MultiDiGraph, dict[str, float], dict]:
     """Cluster edges by their centrality metrics.
 
@@ -373,6 +400,11 @@ def classify_edges(
         hierarchical variants (hc_sl, hc_cl, hc_ward, hc_al).
     n_clusters : int
         Number of clusters to fit.
+    use_pca : bool
+        If True, scaled features are projected onto their first two
+        principal components before clustering. The projection and PCA
+        parameters are returned in ``extras["pca_info"]`` and
+        ``extras["X_pca"]``.
 
     Returns
     -------
@@ -398,32 +430,32 @@ def classify_edges(
     X[:, bet_idx] = np.log1p(X[:, bet_idx])
 
     extras: dict = {}
+    pca_info: dict | None = None
+
+    if method == "som":
+        scaler = MinMaxScaler()
+    else:
+        scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    if use_pca:
+        X_scaled, pca_info = _apply_pca(X_scaled)
 
     if method in HC_METHODS:
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
         labels, model_metrics, extras = _classify_with_hc(
             X_scaled, HC_METHODS[method], n_clusters
         )
     elif method == "som":
-        # SOMs work better with bounded inputs.
-        X_som = MinMaxScaler().fit_transform(X)
         labels, model_metrics, extras = _classify_with_som(
-            X_som, n_clusters, y_true
+            X_scaled, n_clusters, y_true
         )
     elif method == "gmm":
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
         labels, model_metrics, extras = _classify_with_gmm(X_scaled, n_clusters)
     elif method == "fkmeans":
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
         labels, model_metrics, extras = _classify_with_fkmeans(
             X_scaled, n_clusters, y_true
         )
     elif method == "kmeans":
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
         performance_per_k = _kmeans_eval(X_scaled, y_true)
         model = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
         labels = model.fit_predict(X_scaled)
@@ -445,6 +477,10 @@ def classify_edges(
         extras["performance_per_k"] = performance_per_k
     else:
         raise ValueError(f"Unknown method: {method}")
+
+    if pca_info is not None:
+        extras["pca_info"] = pca_info
+        extras["X_pca"] = X_scaled
 
     for i, (u, v, key) in enumerate(edge_order):
         G[u][v][key]["cluster"] = int(labels[i])

@@ -60,3 +60,45 @@ class TestExportTxt:
         # int values should not have decimal formatting
         assert "10.0" not in content
         assert "100.0" not in content
+
+    def test_pca_section_rendered(self, tmp_path):
+        filepath = tmp_path / "metrics.txt"
+        pca_info = {
+            "explained_variance_ratio": [0.7, 0.2],
+            "explained_variance": [1.4, 0.4],
+            "singular_values": [3.5, 1.8],
+            "components": [
+                [0.6, 0.5, 0.6],
+                [-0.7, 0.7, 0.1],
+            ],
+            "mean": [0.0, 0.0, 0.0],
+            "feature_names": ["betweenness", "clustering", "degree"],
+        }
+        export_txt(
+            filepath,
+            city="Test",
+            method="kmeans",
+            n_clusters=3,
+            model_metrics={"inertia": 1.0, "silhouette_score": 0.5},
+            pca_info=pca_info,
+        )
+        content = filepath.read_text()
+        assert "PCA Parameters" in content
+        assert "Explained variance ratio (PC1)" in content
+        assert "Explained variance ratio (PC2)" in content
+        assert "Cumulative explained variance" in content
+        assert "Loadings" in content
+        assert "PC1" in content and "PC2" in content
+        assert "betweenness" in content
+
+    def test_no_pca_section_when_info_absent(self, tmp_path):
+        filepath = tmp_path / "metrics.txt"
+        export_txt(
+            filepath,
+            city="Test",
+            method="kmeans",
+            n_clusters=3,
+            model_metrics={"inertia": 1.0},
+        )
+        content = filepath.read_text()
+        assert "PCA Parameters" not in content

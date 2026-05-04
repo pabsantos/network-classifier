@@ -9,6 +9,7 @@ from sklearn.cluster import AgglomerativeClustering
 from network_classifier.plots import (
     _build_linkage_matrix,
     plot_dendrogram,
+    plot_pca_scatter,
     plot_performance,
 )
 
@@ -44,6 +45,25 @@ class TestBuildLinkageMatrix:
         assert (Z[:, 2] >= 0).all()
         # counts should sum to n_samples at the last merge
         assert Z[-1, 3] == 50
+
+
+class TestPlotPCAScatter:
+    def test_creates_file(self, tmp_path):
+        rng = np.random.RandomState(0)
+        X_pca = rng.randn(60, 2)
+        labels = rng.randint(0, 3, size=60)
+        pca_info = {
+            "explained_variance_ratio": [0.65, 0.25],
+            "explained_variance": [1.3, 0.5],
+            "singular_values": [3.2, 1.5],
+            "components": [[0.6, 0.5, 0.6], [-0.7, 0.7, 0.1]],
+            "mean": [0.0, 0.0, 0.0],
+            "feature_names": ["betweenness", "clustering", "degree"],
+        }
+        filepath = tmp_path / "pca.png"
+        plot_pca_scatter(X_pca, labels, pca_info, filepath)
+        assert filepath.exists()
+        assert filepath.stat().st_size > 0
 
 
 class TestPlotDendrogram:
