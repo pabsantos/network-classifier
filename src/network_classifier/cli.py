@@ -29,7 +29,7 @@ console = Console()
 def _default_output(label: str, fmt: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
     ext = "graphml" if fmt == "graphml" else "gpkg"
-    return f"{slug}.{ext}"
+    return f"output/{slug}.{ext}"
 
 
 def main() -> None:
@@ -142,7 +142,7 @@ def main() -> None:
         model_metrics["v_measure"] = highway_cluster_v_measure(G)
         _print_model_metrics(args.method, model_metrics)
 
-        plot_dir = output_path.parent / "output"
+        plot_dir = output_path.parent
 
         console.log("Generating KDE plots...")
         kde_paths = plot_kde(G, plot_dir)
@@ -186,6 +186,7 @@ def main() -> None:
         )
         console.log(f"  Saved [bold]{txt_path}[/bold]")
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     console.log(f"Exporting to [bold]{output}[/bold]...")
     if args.format == "graphml":
         export_graphml(G, output)
