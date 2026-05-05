@@ -508,7 +508,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/6d/9c/999bc2f1bee4cfbb6
 
 [[package]]
 name = "network-classifier"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "contextily" },
